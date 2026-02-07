@@ -36,8 +36,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirigir usuarios autenticados fuera de auth pages
-  if (request.nextUrl.pathname.startsWith("/auth") && user) {
+  // Allow authenticated users to access /auth/pending (they need it while awaiting approval)
+  const isAuthPending = request.nextUrl.pathname === "/auth/pending"
+  const isAuthCallback = request.nextUrl.pathname === "/auth/callback"
+
+  // Redirigir usuarios autenticados fuera de auth pages (except pending & callback)
+  if (request.nextUrl.pathname.startsWith("/auth") && user && !isAuthPending && !isAuthCallback) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)

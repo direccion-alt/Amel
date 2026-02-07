@@ -38,7 +38,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/callback`,
           data: {
             full_name: fullName,
             role: "user",
@@ -46,7 +46,7 @@ export default function SignUpPage() {
         },
       })
       if (error) throw error
-      router.push("/auth/signup-success")
+      router.push("/auth/pending")
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Error al registrarse")
     } finally {
