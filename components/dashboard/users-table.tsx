@@ -15,7 +15,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Shield, User, Truck } from "lucide-react"
+import { CheckCircle2, MoreHorizontal, Shield, User, Truck, XCircle } from "lucide-react"
 import type { Profile, Unit, UserUnit } from "@/lib/types"
 
 interface UsersTableProps {
@@ -27,6 +27,21 @@ interface UsersTableProps {
 export function UsersTable({ users, units, userUnits }: UsersTableProps) {
   const router = useRouter()
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null)
+
+  const PERMISSIONS = [
+    { key: "dashboard", label: "Panel General" },
+    { key: "units", label: "Unidades" },
+    { key: "operators", label: "Operadores" },
+    { key: "rutas", label: "Rutas Operativas" },
+    { key: "casetas", label: "Casetas" },
+    { key: "control_diesel", label: "Control de Diesel" },
+    { key: "trips", label: "Logística" },
+    { key: "analisis", label: "Análisis Financiero" },
+    { key: "mantenimiento", label: "Mantenimiento" },
+    { key: "tracking", label: "Rastreo GPS" },
+    { key: "users", label: "Usuarios" },
+    { key: "settings", label: "Configuración" },
+  ]
 
   const getUserUnits = (userId: string) => {
     const assignedUnitIds = userUnits.filter((uu) => uu.user_id === userId).map((uu) => uu.unit_id)
@@ -64,6 +79,31 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
     router.refresh()
   }
 
+  const handleUpdateStatus = async (userId: string, status: "pending" | "approved" | "rejected") => {
+    setLoadingUserId(userId)
+    const supabase = createClient()
+
+    await supabase.from("profiles").update({ status }).eq("id", userId)
+
+    setLoadingUserId(null)
+    router.refresh()
+  }
+
+  const handleTogglePermission = async (userId: string, key: string, value: boolean, current?: Record<string, boolean>) => {
+    setLoadingUserId(userId)
+    const supabase = createClient()
+
+    const nextPermissions = {
+      ...(current || {}),
+      [key]: value,
+    }
+
+    await supabase.from("profiles").update({ permissions: nextPermissions }).eq("id", userId)
+
+    setLoadingUserId(null)
+    router.refresh()
+  }
+
   return (
     <div className="rounded-lg border">
       <Table>
@@ -72,6 +112,7 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
             <TableHead>Usuario</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Rol</TableHead>
+              <TableHead>Estatus</TableHead>
             <TableHead>Unidades Asignadas</TableHead>
             <TableHead>Fecha de Registro</TableHead>
             <TableHead className="w-[100px]">Acciones</TableHead>
@@ -80,7 +121,7 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
         <TableBody>
           {users.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 No hay usuarios registrados
               </TableCell>
             </TableRow>
@@ -104,6 +145,11 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
                     <Badge variant={user.role === "admin" ? "default" : "secondary"}>
                       {user.role === "admin" ? "Administrador" : "Usuario"}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {user.status === "approved" && <Badge className="bg-green-100 text-green-700">Aprobado</Badge>}
+                    {user.status === "pending" && <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>}
+                    {user.status === "rejected" && <Badge className="bg-red-100 text-red-700">Rechazado</Badge>}
                   </TableCell>
                   <TableCell>
                     {user.role === "admin" ? (
@@ -137,10 +183,32 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuItem onClick={() => handleUpdateStatus(user.id, "approved")}>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Aprobar acceso
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleUpdateStatus(user.id, "rejected")}>
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Rechazar acceso
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleToggleAdmin(user.id, user.role)}>
                           <Shield className="mr-2 h-4 w-4" />
                           {user.role === "admin" ? "Quitar admin" : "Hacer admin"}
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Permisos</DropdownMenuLabel>
+                        {PERMISSIONS.map((perm) => (
+                          <DropdownMenuCheckboxItem
+                            key={perm.key}
+                            checked={user.permissions?.[perm.key] ?? false}
+                            onCheckedChange={(checked) =>
+                              handleTogglePermission(user.id, perm.key, Boolean(checked), user.permissions)
+                            }
+                          >
+                            {perm.label}
+                          </DropdownMenuCheckboxItem>
+                        ))}
                         <DropdownMenuSeparator />
                         <DropdownMenuLabel className="flex items-center gap-2">
                           <Truck className="h-4 w-4" />

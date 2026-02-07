@@ -18,6 +18,8 @@ import {
   ChevronLeft,
   Menu,
   UserCheck,
+  MapPin as RoadIcon,
+  DollarSign,
 } from "lucide-react"
 import { useState } from "react"
 import type { Profile } from "@/lib/types"
@@ -27,24 +29,31 @@ interface SidebarProps {
 }
 
 const adminLinks = [
-  { href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
-  { href: "/dashboard/units", label: "Unidades", icon: Truck },
-  { href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
-  { href: "/dashboard/fuel", label: "Combustible", icon: Fuel },
-  { href: "/dashboard/trips", label: "Viajes", icon: Route },
-  { href: "/dashboard/maintenance", label: "Mantenimiento", icon: Wrench },
-  { href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
-  { href: "/dashboard/users", label: "Usuarios", icon: Users },
-  { href: "/dashboard/settings", label: "Configuración", icon: Settings },
+  { key: "dashboard", href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
+  { key: "units", href: "/dashboard/units", label: "Unidades", icon: Truck },
+  { key: "operators", href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
+  { key: "rutas", href: "/dashboard/rutas-operativas", label: "Rutas Operativas", icon: Route },
+  { key: "casetas", href: "/dashboard/casetas", label: "Casetas", icon: DollarSign },
+  { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },
+  { key: "trips", href: "/dashboard/trips", label: "Logística", icon: RoadIcon },
+  { key: "analisis", href: "/dashboard/analisis-financiero", label: "Análisis Financiero", icon: DollarSign },
+  { key: "mantenimiento", href: "/dashboard/mantenimiento", label: "Mantenimiento", icon: Wrench },
+  { key: "tracking", href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
+  { key: "users", href: "/dashboard/users", label: "Usuarios", icon: Users },
+  { key: "settings", href: "/dashboard/settings", label: "Configuración", icon: Settings },
 ]
 
 const userLinks = [
-  { href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
-  { href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
-  { href: "/dashboard/fuel", label: "Combustible", icon: Fuel },
-  { href: "/dashboard/trips", label: "Viajes", icon: Route },
-  { href: "/dashboard/maintenance", label: "Mantenimiento", icon: Wrench },
-  { href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
+  { key: "dashboard", href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
+  { key: "units", href: "/dashboard/units", label: "Unidades", icon: Truck },
+  { key: "operators", href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
+  { key: "rutas", href: "/dashboard/rutas-operativas", label: "Rutas Operativas", icon: Route },
+  { key: "casetas", href: "/dashboard/casetas", label: "Casetas", icon: DollarSign },
+  { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },
+  { key: "trips", href: "/dashboard/trips", label: "Logística", icon: RoadIcon },
+  { key: "analisis", href: "/dashboard/analisis-financiero", label: "Análisis Financiero", icon: DollarSign },
+  { key: "mantenimiento", href: "/dashboard/mantenimiento", label: "Mantenimiento", icon: Wrench },
+  { key: "tracking", href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
 ]
 
 export function Sidebar({ profile }: SidebarProps) {
@@ -53,7 +62,12 @@ export function Sidebar({ profile }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const links = profile.role === "admin" ? adminLinks : userLinks
+  const rawLinks = profile.role === "admin" ? adminLinks : userLinks
+  const permissions = profile.permissions || {}
+  const links = rawLinks.filter((link) => {
+    if (profile.role === "admin" && Object.keys(permissions).length === 0) return true
+    return permissions[link.key] === true
+  })
 
   const handleLogout = async () => {
     const supabase = createClient()

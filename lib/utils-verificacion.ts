@@ -27,23 +27,29 @@ export const calcularEstadoAmbiental = (placa: string, fechaUltimaVerif: string)
 
   const hoy = new Date();
   const ultima = new Date(fechaUltimaVerif);
-  const añoActual = hoy.getFullYear();
   const mesActual = hoy.getMonth();
+  const mesVerificacion = ultima.getMonth();
 
-  // Si la verificación es de un año anterior, está vencida
-  if (ultima.getFullYear() < añoActual) {
+  // REGLA CRÍTICA: Verificación SEMESTRAL (cada 6 meses)
+  // Periodos: 1er semestre (meses 0-5) y 2do semestre (meses 6-11)
+  const mesesDesdeVerificacion = (hoy.getTime() - ultima.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+
+  // Si han pasado más de 6 meses desde la última verificación, VENCIDA
+  if (mesesDesdeVerificacion >= 6) {
     return { color: "bg-red-500 text-white", texto: "VENCIDA" };
   }
 
-  // Si ya se hizo este año, revisamos si estamos en un periodo donde toca la siguiente
-  // (Lógica simplificada: si ya tiene fecha del año actual, está bien a menos que estemos en el periodo de placa)
+  // Si faltan menos de 30 días para cumplir 6 meses Y estamos en periodo de placa, TOCA RENOVAR
+  const diasParaVencimiento = (6 - mesesDesdeVerificacion) * 30.44;
   const tocaPeriodoEmi = info.mesesEmi.includes(mesActual);
-  
-  // Si estamos en su mes de placa y la fecha del documento es vieja (más de 4 meses)
-  const mesesDiferencia = (hoy.getTime() - ultima.getTime()) / (1000 * 60 * 60 * 24 * 30);
-  
-  if (tocaPeriodoEmi && mesesDiferencia > 4) {
+
+  if (diasParaVencimiento <= 30 && tocaPeriodoEmi) {
     return { color: "bg-orange-500 text-white animate-pulse", texto: "TOCA RENOVAR" };
+  }
+
+  // Si han pasado más de 5 meses pero aún no llega a 6, PRÓXIMA A VENCER
+  if (mesesDesdeVerificacion >= 5) {
+    return { color: "bg-yellow-500 text-black font-bold", texto: "PRÓXIMA A VENCER" };
   }
 
   return { color: "bg-green-600 text-white", texto: "AL DÍA" };
@@ -61,27 +67,40 @@ export const calcularEstadoFisicoMecanica = (placa: string, fechaUltimaVerif: st
   const añoActual = hoy.getFullYear();
   const mesActual = hoy.getMonth();
 
-  // REGLA DE ORO: Si se hizo en cualquier mes del año actual, está AL DÍA (Vigencia Anual)
+  // REGLA CRÍTICA: Verificación ANUAL (1 vez al año)
+  // Si ya se verificó este año, está vigente todo el año
   if (ultima.getFullYear() === añoActual) {
     return { color: "bg-green-600 text-white", texto: "AL DÍA" };
   }
 
-  // Si es del año pasado, revisamos si ya estamos en su mes de cumplimiento obligatorio
-  const tocaPeriodoFM = info.mesesFM.includes(mesActual);
+  // Si es de años anteriores, verificar si ya pasó el periodo obligatorio
+  const añosDesdeVerificacion = añoActual - ultima.getFullYear();
+  
+  // Si tiene más de 1 año de antigüedad, definitivamente VENCIDA
+  if (añosDesdeVerificacion > 1) {
+    return { color: "bg-red-500 text-white", texto: "VENCIDA" };
+  }
 
+  // Si es del año pasado, revisar si ya estamos en o pasamos su periodo de renovación
+  const tocaPeriodoFM = info.mesesFM.includes(mesActual);
+  const yaPasoPeriodo = mesActual > info.mesesFM[info.mesesFM.length - 1];
+
+  // Si ya pasó su periodo de renovación del año actual, VENCIDA
+  if (yaPasoPeriodo) {
+    return { color: "bg-red-500 text-white", texto: "VENCIDA" };
+  }
+
+  // Si estamos en su periodo de renovación, TOCA RENOVAR (alerta urgente)
   if (tocaPeriodoFM) {
     return { color: "bg-orange-500 text-white animate-pulse", texto: "TOCA RENOVAR" };
   }
 
-  // Si ya pasó su mes de cumplimiento y no tiene nada del año actual
-  if (mesActual > info.mesesFM[info.mesesFM.length - 1]) {
-    return { color: "bg-red-500 text-white", texto: "VENCIDA" };
+  // Si aún no llega su periodo pero está cerca (1 mes antes), PRÓXIMA A VENCER
+  const unMesAntes = info.mesesFM[0] - 1;
+  if (mesActual === unMesAntes) {
+    return { color: "bg-yellow-500 text-black font-bold", texto: "PRÓXIMA A VENCER" };
   }
 
-  // Si aún no llega su periodo pero tiene la del año pasado
-  if (ultima.getFullYear() === añoActual - 1) {
-    return { color: "bg-green-600 text-white", texto: "VIGENCIA 2025" };
-  }
-
-  return { color: "bg-red-500 text-white", texto: "VENCIDA" };
+  // Si aún no llega su periodo, técnicamente sigue vigente (tolerancia de año pasado)
+  return { color: "bg-green-600 text-white", texto: "VIGENTE" };
 };

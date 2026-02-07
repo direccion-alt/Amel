@@ -27,12 +27,13 @@ export default function SignUpSuccessPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#FFDE18]">
                 <Mail className="h-8 w-8 text-black" />
               </div>
-              <CardTitle className="text-2xl font-bold text-black">Revisa tu correo</CardTitle>
-              <CardDescription className="text-gray-500">Te hemos enviado un enlace de confirmación</CardDescription>
+              <CardTitle className="text-2xl font-bold text-black">Registro recibido</CardTitle>
+              <CardDescription className="text-gray-500">Confirmación y aprobación requeridas</CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-sm text-gray-600 mb-6">
-                Por favor revisa tu bandeja de entrada y haz clic en el enlace de confirmación para activar tu cuenta.
+                Revisa tu bandeja de entrada y confirma tu correo. Después, un administrador deberá aprobar tu acceso
+                antes de que puedas iniciar sesión.
               </p>
               <Button asChild className="w-full h-11 bg-black text-white font-semibold hover:bg-gray-800">
                 <Link href="/auth/login">Volver al inicio de sesión</Link>

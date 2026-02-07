@@ -25,6 +25,10 @@ export default async function DashboardLayout({
     redirect("/auth/login")
   }
 
+  if (profile.status !== "approved") {
+    redirect("/auth/pending")
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar profile={profile as Profile} />

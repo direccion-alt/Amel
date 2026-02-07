@@ -102,11 +102,23 @@ export default function OperadoresPage() {
     }
     setLoading(true)
     try {
+      // Limpiar campos vacíos convirtiéndolos a null
+      const cleanedForm = {
+        ...form,
+        documento_numero: form.documento_numero?.trim() || null,
+        numero_empleado: form.numero_empleado?.trim() || null,
+        telefono: form.telefono?.trim() || null,
+        email: form.email?.trim() || null,
+        vigencia_contrato: form.vigencia_contrato || null,
+        fecha_contratacion: form.fecha_contratacion || null,
+        licencia_vigencia: form.licencia_vigencia || null,
+      }
+      
       if (operadorAEditar?.id) {
-        const { error } = await supabase.from('operadores').update(form).eq('id', operadorAEditar.id)
+        const { error } = await supabase.from('operadores').update(cleanedForm).eq('id', operadorAEditar.id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('operadores').insert([form])
+        const { error } = await supabase.from('operadores').insert([cleanedForm])
         if (error) throw error
       }
       setShowNew(false)
@@ -336,11 +348,12 @@ export default function OperadoresPage() {
                   <label className="text-xs font-bold text-zinc-600 uppercase mb-2 block">Tipo de Licencia</label>
                   <select className="w-full border-2 rounded-lg px-3 py-2 h-11 font-semibold bg-zinc-50 text-sm" value={form.tipo_licencia} onChange={(e) => setForm({...form, tipo_licencia: e.target.value})}>
                     <option value="">Seleccionar...</option>
-                    <option value="A">A - Motocicleta</option>
-                    <option value="B">B - Auto</option>
-                    <option value="C">C - Camión</option>
-                    <option value="D">D - Autobús</option>
-                    <option value="E">E - Remolque</option>
+                    <option value="A - SCT">A - SCT: Autotransporte federal de pasajeros, turismo y servicio privado</option>
+                    <option value="B - SCT">B - SCT: Carga general federal y privada (tractocamiones sencillos)</option>
+                    <option value="C - SCT">C - SCT: Carga general en camiones rígidos (tortón o rabón)</option>
+                    <option value="D - SCT">D - SCT: Chofer-guía de turistas en turismo federal</option>
+                    <option value="E - SCT">E - SCT: Carga especializada, materiales peligrosos y doble articulado (full)</option>
+                    <option value="F - SCT">F - SCT: Pasaje y turismo de/hacia puertos marítimos y aeropuertos federales</option>
                   </select>
                 </div>
                 <div>

@@ -89,7 +89,9 @@ export default function SignUpPage() {
             <Card className="border-none shadow-xl">
               <CardHeader className="space-y-1 pb-4">
                 <CardTitle className="text-2xl font-bold text-black">Registrarse</CardTitle>
-                <CardDescription className="text-gray-500">Crea una nueva cuenta para acceder</CardDescription>
+                <CardDescription className="text-gray-500">
+                  Crea una nueva cuenta. El acceso requiere aprobación de un administrador.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSignUp}>

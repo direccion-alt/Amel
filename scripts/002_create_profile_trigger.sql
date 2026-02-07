@@ -6,12 +6,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, email, full_name, role, status, permissions)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', NEW.email),
-    COALESCE(NEW.raw_user_meta_data ->> 'role', 'user')
+    COALESCE(NEW.raw_user_meta_data ->> 'role', 'user'),
+    COALESCE(NEW.raw_user_meta_data ->> 'status', 'pending'),
+    COALESCE(NEW.raw_user_meta_data -> 'permissions', '{}'::jsonb)
   )
   ON CONFLICT (id) DO NOTHING;
   
