@@ -434,7 +434,7 @@ const handleUpdateIncidencias = async () => {
                   <TableHead className="text-center bg-blue-50/50 text-blue-700 border-x font-black w-[50px]">Km Ecu.</TableHead>
                   <TableHead className="text-center bg-emerald-50 text-emerald-800 border-r font-black italic text-[11px] w-[60px]">Rendimiento</TableHead>
                   <TableHead className="w-[220px]">Comentarios</TableHead>
-                  <TableHead className="sticky right-[100px] z-40 bg-zinc-50 border-l text-center w-[50px]">ESTATUS</TableHead>
+                  <TableHead className="sticky right-[98px] z-40 bg-zinc-50 border-l text-center w-[50px]">ESTATUS</TableHead>
                   <TableHead className="sticky right-0 z-40 bg-zinc-50 border-l text-center w-[40px]">GESTIÓN</TableHead>
                 </TableRow>
               </TableHeader>
@@ -546,7 +546,7 @@ const handleUpdateIncidencias = async () => {
 
                     <TableCell className="truncate text-[11px] text-zinc-400 italic px-4 border-r uppercase">{v.comentarios_gastos || '-'}</TableCell>
                     
-                    <TableCell className="sticky right-[100px] z-20 bg-white border-l p-0 text-center shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                    <TableCell className="sticky right-[98px] z-20 bg-white border-l p-0 text-center shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                       <div className="flex justify-center items-center w-full px-2">
                         <Badge className={v.estatus === 'en ruta' ? 
                           "bg-amber-100 text-amber-700 border border-amber-200 text-[9px] px-2 shadow-sm w-[55px] justify-center font-bold" : 
