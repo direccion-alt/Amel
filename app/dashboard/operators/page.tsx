@@ -23,6 +23,7 @@ export default function OperadoresPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [vigenciaFilterContract, setVigenciaFilterContract] = useState<string>('ALL')
   const [vigenciaFilterLicense, setVigenciaFilterLicense] = useState<string>('ALL')
+  const [estatusFilter, setEstatusFilter] = useState<string>('ACTIVO')
   const [operadorAEditar, setOperadorAEditar] = useState<any>(null)
 
   const initialFormState = {
@@ -70,6 +71,9 @@ export default function OperadoresPage() {
         (op.telefono || '').includes(searchTerm)
       if (!matchesSearch) return false
 
+      const statusValue = (op.estatus || '').toUpperCase()
+      if (estatusFilter !== 'ALL' && statusValue !== estatusFilter) return false
+
       // If both filters are ALL, include by default
       if (vigenciaFilterContract === 'ALL' && vigenciaFilterLicense === 'ALL') return true
 
@@ -93,7 +97,7 @@ export default function OperadoresPage() {
       return contractOk && licenseOk
     })
     setFiltrados(filtered)
-  }, [searchTerm, operadores, vigenciaFilterContract, vigenciaFilterLicense])
+  }, [searchTerm, operadores, vigenciaFilterContract, vigenciaFilterLicense, estatusFilter])
 
   const handleSave = async () => {
     if (!form.nombre || !form.apellido) {
@@ -188,6 +192,16 @@ export default function OperadoresPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-zinc-600">Estatus:</label>
+                <select value={estatusFilter} onChange={(e) => setEstatusFilter(e.target.value)} className="border rounded-lg px-3 py-2 h-10 font-semibold bg-white text-sm">
+                  <option value="ACTIVO">Activos</option>
+                  <option value="INACTIVO">Inactivos</option>
+                  <option value="SUSPENDIDO">Suspendidos</option>
+                  <option value="ALL">Todos</option>
+                </select>
+              </div>
+
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-zinc-600">Contrato:</label>
                 <select value={vigenciaFilterContract} onChange={(e) => setVigenciaFilterContract(e.target.value)} className="border rounded-lg px-3 py-2 h-10 font-semibold bg-white text-sm">

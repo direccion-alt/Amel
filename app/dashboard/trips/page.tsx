@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs"
+import Link from "next/link"
 import { 
   Truck, Fuel, Gauge, MapPin, Clock, PlusCircle, History, 
   AlertTriangle, Calculator, Coins, CheckCircle2, ArrowRightLeft, Loader2, Calendar,
@@ -25,6 +26,7 @@ export default function MonitoreoAmelElite() {
   const [operadores, setOperadores] = useState<any[]>([])
   const [viajes, setViajes] = useState<any[]>([])
   const [allViajes, setAllViajes] = useState<any[]>([])
+  const [rutasOperativas, setRutasOperativas] = useState<any[]>([])
   const [unidadFilter, setUnidadFilter] = useState<string>('ALL')
   const [clienteFilter, setClienteFilter] = useState<string>('ALL')
   const [origenFilter, setOrigenFilter] = useState<string>('ALL')
@@ -60,12 +62,14 @@ export default function MonitoreoAmelElite() {
   const [form, setForm] = useState(initialFormState)
 
   const fetchData = async () => {
-    const { data: u } = await supabase.from('unidades').select('economico').eq('estatus', 'Activo').ilike('economico', '%TRAC%').order('economico', { ascending: true })
+    const { data: u } = await supabase.from('unidades').select('id, economico, tipo').eq('estatus', 'Activo').ilike('economico', '%TRAC%').order('economico', { ascending: true })
     const { data: v } = await supabase.from('viajes').select('*').order('created_at', { ascending: false })
     const { data: op } = await supabase.from('operadores').select('*').eq('estatus', 'Activo').order('nombre', { ascending: true })
+    const { data: ro } = await supabase.from('rutas_operativas').select('origen, destino').order('origen', { ascending: true })
     if (u) setUnidades(u)
     if (v) { setAllViajes(v); setViajes(v) }
     if (op) setOperadores(op)
+    if (ro) setRutasOperativas(ro)
   }
 
   useEffect(() => { fetchData() }, [])
@@ -92,7 +96,7 @@ export default function MonitoreoAmelElite() {
       filtered = filtered.filter((t) => (t.estado_carga || '').toUpperCase() === estadoCargaFilter)
     }
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter((t) => (t.estatus || '').toUpperCase() === statusFilter)
+      filtered = filtered.filter((t) => normalizeStatus(t.estatus) === statusFilter)
     }
     setViajes(filtered)
   }, [unidadFilter, clienteFilter, origenFilter, destinoFilter, modalidadFilter, estadoCargaFilter, statusFilter, allViajes])
@@ -109,6 +113,74 @@ export default function MonitoreoAmelElite() {
     if (value === '' || value === null || value === undefined) return null
     const parsed = Number(value)
     return Number.isNaN(parsed) ? null : parsed
+  }
+
+  const normalizeStatus = (status: any) => {
+    const normalized = (status || '').toUpperCase()
+    return normalized === 'ENTREGADO' ? 'FINALIZADO' : normalized
+  }
+
+  const getKmEcuacion = (viaje: any) => {
+    if (!viaje) return 0
+    let kmBruto = 0
+
+    if (Number.isFinite(viaje.km_total)) {
+      kmBruto = Number(viaje.km_total)
+    } else if (viaje.km_final !== null && viaje.km_final !== undefined) {
+      kmBruto = toNumber(viaje.km_final) - toNumber(viaje.km_inicial)
+    } else {
+      return 0
+    }
+
+    const kmEcu = viaje.es_millas ? (kmBruto * 1.6) : kmBruto
+    return Number.isFinite(kmEcu) ? kmEcu : 0
+  }
+
+  const getDieselConsumido = (viaje: any) => {
+    const diesel =
+      (toNumber(viaje?.lts_cargado_pilot) - toNumber(viaje?.lts_final_pilot)) +
+      (toNumber(viaje?.lts_cargado_copilot) - toNumber(viaje?.lts_final_copilot))
+    return Number.isFinite(diesel) ? diesel : 0
+  }
+
+  const origenesDisponibles = useMemo(() => {
+    const origenes = rutasOperativas
+      .map((ruta) => (ruta.origen || '').toUpperCase())
+      .filter((origen) => origen)
+    return Array.from(new Set(origenes)).sort()
+  }, [rutasOperativas])
+
+  const destinosDisponibles = useMemo(() => {
+    const destinos = rutasOperativas
+      .map((ruta) => (ruta.destino || '').toUpperCase())
+      .filter((destino) => destino)
+    return Array.from(new Set(destinos)).sort()
+  }, [rutasOperativas])
+
+  const computeCierreMetrics = (viaje: any) => {
+    if (!viaje?.km_final) return {}
+
+    const kmBruto = toNumber(viaje.km_final) - toNumber(viaje.km_inicial)
+    const kmEcuacion = viaje.es_millas ? (kmBruto * 1.6) : kmBruto
+    const dieselConsumido =
+      (toNumber(viaje.lts_cargado_pilot) - toNumber(viaje.lts_final_pilot)) +
+      (toNumber(viaje.lts_cargado_copilot) - toNumber(viaje.lts_final_copilot))
+    const rendimientoFinal = dieselConsumido > 0 ? (kmEcuacion / dieselConsumido) : 0
+
+    let diasTotales = null as number | null
+    if (viaje.fecha_inicial && viaje.fecha_final) {
+      const fInicio = new Date(viaje.fecha_inicial)
+      const fFin = new Date(viaje.fecha_final)
+      const diffMs = fFin.getTime() - fInicio.getTime()
+      diasTotales = Math.floor(diffMs / (1000 * 60 * 60 * 24)) || 0
+    }
+
+    return {
+      km_total: kmBruto,
+      km_total_ecuacion: kmEcuacion,
+      rendimiento: rendimientoFinal,
+      dias_totales: diasTotales,
+    }
   }
 
   const handleSave = async () => {
@@ -146,7 +218,7 @@ export default function MonitoreoAmelElite() {
         km_incidente3: toNumberOrNull(form.km_incidente3),
         pension: toNumberOrNull(form.pension),
         gastos_adicionales: toNumberOrNull(form.gastos_adicionales),
-        estatus: 'en ruta',
+        estatus: 'EN RUTA',
         lts_cargado_sensores: ltsEntraron,
         diferencia_carga: toNumber(form.lts_ticket) - ltsEntraron
       }
@@ -213,6 +285,7 @@ export default function MonitoreoAmelElite() {
     setLoading(true)
     try {
       const ltsEntraron = ((toNumber(viajeAEditar.lts_cargado_pilot) - toNumber(viajeAEditar.lts_antes_pilot)) + (toNumber(viajeAEditar.lts_cargado_copilot) - toNumber(viajeAEditar.lts_antes_copilot)));
+      const cierreMetrics = computeCierreMetrics(viajeAEditar)
       const { error } = await supabase.from('viajes').update({
         cliente: viajeAEditar.cliente?.toUpperCase(),
         proveedor: viajeAEditar.proveedor?.toUpperCase(),
@@ -243,7 +316,8 @@ export default function MonitoreoAmelElite() {
         pension: toNumberOrNull(viajeAEditar.pension),
         gastos_adicionales: toNumberOrNull(viajeAEditar.gastos_adicionales),
         lts_cargado_sensores: ltsEntraron,
-        diferencia_carga: toNumber(viajeAEditar.lts_ticket) - ltsEntraron
+        diferencia_carga: toNumber(viajeAEditar.lts_ticket) - ltsEntraron,
+        ...cierreMetrics
       }).eq('id', viajeAEditar.id)
       if (error) throw error
       setViajeAEditar(null)
@@ -300,7 +374,7 @@ const handleUpdateIncidencias = async () => {
         km_total_ecuacion: kmEcuacion, 
         rendimiento: rendimientoFinal,
         dias_totales: diasFinales,
-        estatus: 'entregado'
+        estatus: 'FINALIZADO'
       }).eq('id', viajeAFinalizar.id)
       
       if (error) throw error
@@ -323,9 +397,16 @@ const handleUpdateIncidencias = async () => {
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-black italic uppercase tracking-tighter">AMEL <span className="text-zinc-400">LOGÍSTICA</span></h1>
           </div>
-          <Button onClick={() => { resetForm(); setShowNew(true); }} style={{backgroundColor: AMEL_YELLOW, color: '#000'}} className="font-black italic px-6 h-10 shadow-md">
-            <PlusCircle className="mr-2 h-4 w-4" /> NUEVO DESPACHO
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Link href="/dashboard/logistica-dashboard" className="w-full sm:w-auto">
+              <Button variant="outline" className="font-black italic px-6 h-10 shadow-sm w-full">
+                VER DASHBOARD
+              </Button>
+            </Link>
+            <Button onClick={() => { resetForm(); setShowNew(true); }} style={{backgroundColor: AMEL_YELLOW, color: '#000'}} className="font-black italic px-6 h-10 shadow-md">
+              <PlusCircle className="mr-2 h-4 w-4" /> NUEVO DESPACHO
+            </Button>
+          </div>
         </div>
 
         {/* PANEL DE FILTROS COMPLETO */}
@@ -386,7 +467,7 @@ const handleUpdateIncidencias = async () => {
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border rounded px-2 py-1 text-xs bg-white">
                 <option value="ALL">Todos</option>
                 <option value="EN RUTA">EN RUTA</option>
-                <option value="ENTREGADO">ENTREGADO</option>
+                <option value="FINALIZADO">FINALIZADO</option>
               </select>
             </div>
 
@@ -432,6 +513,7 @@ const handleUpdateIncidencias = async () => {
                   <TableHead className="text-center font-bold w-[40px]">Km Final</TableHead>
                   <TableHead className="text-center bg-zinc-100 w-[40px]">Km Bruto</TableHead>
                   <TableHead className="text-center bg-blue-50/50 text-blue-700 border-x font-black w-[50px]">Km Ecu.</TableHead>
+                  <TableHead className="text-center bg-slate-50 text-slate-700 border-r font-black italic text-[11px] w-[70px]">Diesel Cons.</TableHead>
                   <TableHead className="text-center bg-emerald-50 text-emerald-800 border-r font-black italic text-[11px] w-[60px]">Rendimiento</TableHead>
                   <TableHead className="w-[220px]">Comentarios</TableHead>
                   <TableHead className="sticky right-[98px] z-40 bg-zinc-50 border-l text-center w-[50px]">ESTATUS</TableHead>
@@ -523,6 +605,13 @@ const handleUpdateIncidencias = async () => {
                       </div>
                     </TableCell>
 
+                    <TableCell className="text-center bg-slate-50/40 text-slate-700 border-r font-mono font-bold text-[12px]">
+                      {(() => {
+                        const dieselConsumido = ((v.lts_cargado_pilot || 0) - (v.lts_final_pilot || 0)) + ((v.lts_cargado_copilot || 0) - (v.lts_final_copilot || 0))
+                        return Number.isFinite(dieselConsumido) ? dieselConsumido.toFixed(1) : '0.0'
+                      })()}
+                    </TableCell>
+
                     {/* RENDIMIENTO: El cuadro ejecutivo Negro/Amarillo */}
                     <TableCell className="text-center p-2 bg-emerald-50/5 border-r">
                       <div className="flex justify-center">
@@ -548,11 +637,16 @@ const handleUpdateIncidencias = async () => {
                     
                     <TableCell className="sticky right-[98px] z-20 bg-white border-l p-0 text-center shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                       <div className="flex justify-center items-center w-full px-2">
-                        <Badge className={v.estatus === 'en ruta' ? 
-                          "bg-amber-100 text-amber-700 border border-amber-200 text-[9px] px-2 shadow-sm w-[55px] justify-center font-bold" : 
-                          "bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] px-2 shadow-sm w-[55px] justify-center font-bold"}>
-                          {v.estatus?.toUpperCase() === 'EN RUTA' ? 'RUTA' : 'LISTO'}
-                        </Badge>
+                        {(() => {
+                          const statusNormalized = normalizeStatus(v.estatus)
+                          return (
+                            <Badge className={statusNormalized === 'EN RUTA' ? 
+                              "bg-amber-100 text-amber-700 border border-amber-200 text-[9px] px-2 shadow-sm w-[55px] justify-center font-bold" : 
+                              "bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] px-2 shadow-sm w-[55px] justify-center font-bold"}>
+                              {statusNormalized === 'EN RUTA' ? 'RUTA' : 'FINAL'}
+                            </Badge>
+                          )
+                        })()}
                       </div>
                     </TableCell>
 
@@ -560,7 +654,7 @@ const handleUpdateIncidencias = async () => {
                       <div className="flex gap-0 justify-center items-center h-full px-2">
                         <button onClick={() => setViajeAIncidencias(v)} className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors"><AlertTriangle size={15} /></button>
                         <button onClick={() => setViajeAEditar(v)} className="p-2 hover:bg-amber-50 rounded-full text-amber-600 transition-colors"><Edit3 size={15} /></button>
-                        {v.estatus === 'en ruta' && (
+                        {normalizeStatus(v.estatus) === 'EN RUTA' && (
                           <button onClick={() => setViajeAFinalizar(v)} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-900 transition-colors"><CheckCircle2 size={15} /></button>
                         )}
                       </div>
@@ -602,7 +696,20 @@ const handleUpdateIncidencias = async () => {
               </div>
               <div className="space-y-3">
                 <h3 className="flex items-center gap-2 text-xs font-black text-zinc-400 uppercase border-b pb-1"><MapPin size={14}/> Trayecto</h3>
-                <div className="grid grid-cols-2 gap-2"><Input placeholder="ORIGEN" className="uppercase h-8 text-xs" onChange={(e) => setForm({...form, origen: e.target.value.toUpperCase()})} /><Input placeholder="DESTINO" className="uppercase h-8 text-xs" onChange={(e) => setForm({...form, destino: e.target.value.toUpperCase()})} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select className="uppercase w-full border-2 p-2 rounded-lg font-bold bg-zinc-50 text-xs" value={form.origen} onChange={(e) => setForm({...form, origen: e.target.value})}>
+                    <option value="">ORIGEN...</option>
+                    {origenesDisponibles.map((origen) => (
+                      <option key={origen} value={origen}>{origen}</option>
+                    ))}
+                  </select>
+                  <select className="uppercase w-full border-2 p-2 rounded-lg font-bold bg-zinc-50 text-xs" value={form.destino} onChange={(e) => setForm({...form, destino: e.target.value})}>
+                    <option value="">DESTINO...</option>
+                    {destinosDisponibles.map((destino) => (
+                      <option key={destino} value={destino}>{destino}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 text-center">
                   <label className="text-[9px] font-black text-blue-700 italic uppercase block">KM Inicial</label>
                   <Input type="number" placeholder="0.00" className="font-black text-2xl h-10 text-center border-none bg-transparent" value={form.km_inicial} onChange={(e) => setForm({...form, km_inicial: e.target.value})} />
@@ -696,7 +803,7 @@ const handleUpdateIncidencias = async () => {
       <Dialog open={!!viajeAEditar} onOpenChange={() => { setViajeAEditar(null); setEditarTabApertura(true); }}>
         <DialogContent className="max-w-[95vw] lg:max-w-[1300px] bg-white p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           {/* Si el viaje está ABIERTO, solo mostrar Corregir Despacho */}
-          {viajeAEditar?.estatus === 'en ruta' ? (
+          {normalizeStatus(viajeAEditar?.estatus) === 'EN RUTA' ? (
             <>
               <DialogHeader className="bg-amber-500 p-8 text-white border-b-4 border-black/10 flex justify-between items-center">
                 <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3"><Settings2 className="h-8 w-8" /> Corregir Despacho</DialogTitle>
