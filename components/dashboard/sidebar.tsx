@@ -31,7 +31,7 @@ interface SidebarProps {
 const adminLinks = [
   { key: "dashboard", href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
   { key: "units", href: "/dashboard/units", label: "Unidades", icon: Truck },
-  { key: "operators", href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
+  { key: "operators", href: "/dashboard/operators", label: "Personal", icon: UserCheck },
   { key: "rutas", href: "/dashboard/rutas-operativas", label: "Rutas Operativas", icon: Route },
   { key: "casetas", href: "/dashboard/casetas", label: "Casetas", icon: DollarSign },
   { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },
@@ -46,7 +46,7 @@ const adminLinks = [
 const userLinks = [
   { key: "dashboard", href: "/dashboard", label: "Panel General", icon: LayoutDashboard },
   { key: "units", href: "/dashboard/units", label: "Unidades", icon: Truck },
-  { key: "operators", href: "/dashboard/operators", label: "Operadores", icon: UserCheck },
+  { key: "operators", href: "/dashboard/operators", label: "Personal", icon: UserCheck },
   { key: "rutas", href: "/dashboard/rutas-operativas", label: "Rutas Operativas", icon: Route },
   { key: "casetas", href: "/dashboard/casetas", label: "Casetas", icon: DollarSign },
   { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },

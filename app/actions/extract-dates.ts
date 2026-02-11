@@ -2,10 +2,14 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI("AIzaSyCQ_Cu2E_NYlaidhfZUWLnoVWC1V8tO_oI");
+const apiKey = process.env.GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export async function extraerFechaDesdePDF(pdfUrl: string, campoFecha: string) {
   try {
+    if (!genAI) {
+      throw new Error("GEMINI_API_KEY no configurada");
+    }
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     // 1. Descargamos el archivo desde Supabase para enviárselo directamente a la IA

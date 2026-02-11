@@ -5,10 +5,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Inicializar Gemini con la misma API key que en extract-dates.ts
-const genAI = new GoogleGenerativeAI("AIzaSyCQ_Cu2E_NYlaidhfZUWLnoVWC1V8tO_oI")
+const apiKey = process.env.GEMINI_API_KEY
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null
 
 export async function POST(request: NextRequest) {
   try {
+    if (!genAI) {
+      console.error('GEMINI_API_KEY no configurada')
+      return NextResponse.json({ error: 'GEMINI_API_KEY no configurada' }, { status: 500 })
+    }
     console.log('📸 Iniciando escaneo de factura...')
     
     const formData = await request.formData()

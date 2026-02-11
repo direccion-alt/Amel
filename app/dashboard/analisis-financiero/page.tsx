@@ -294,10 +294,10 @@ export default function AnalisisFinanciero() {
         'PENSIÓN ($)': v.pension || 0,
         'GASTOS ADICIONALES ($)': v.gastos_adicionales || 0,
         'TARIFA CLIENTE': v.tarifa_cliente || 0,
-        'INGRESO BRUTO': ingresoTotal.toFixed(2),
+        'INGRESO NETO': ingresoTotal.toFixed(2),
         'IVA (16%)': (ingresoTotal * 0.16).toFixed(2),
         'RETENCIÓN (4%)': (ingresoTotal * 0.04).toFixed(2),
-        'INGRESO NETO': ingresoNeto.toFixed(2),
+        'INGRESO BRUTO': ingresoNeto.toFixed(2),
         'PAGO OPERADOR MONTO': v.pago_operador || 0,
         'TOTAL CASETAS': v.total_casetas || 0,
         'UTILIDAD': utilidad.toFixed(2),
@@ -546,10 +546,10 @@ export default function AnalisisFinanciero() {
                     <TableHead className="text-center font-black text-[10px] bg-orange-50 border-r">PENSIÓN $</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-rose-50 border-r">GASTOS ADI. $</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-blue-50 border-r">TARIFA CLIENTE</TableHead>
-                    <TableHead className="text-center font-black text-[10px] bg-cyan-50 border-r">INGRESO BRUTO</TableHead>
+                    <TableHead className="text-center font-black text-[10px] bg-cyan-50 border-r">INGRESO NETO</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-orange-50 border-r">IVA (16%)</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-red-50 border-r">RETENCIÓN (4%)</TableHead>
-                    <TableHead className="text-center font-black text-[10px] bg-emerald-50 border-r">INGRESO NETO</TableHead>
+                    <TableHead className="text-center font-black text-[10px] bg-emerald-50 border-r">INGRESO BRUTO</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-green-50 border-r">PAGO OPERADOR</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-amber-50 border-r">TOTAL CASETAS</TableHead>
                     <TableHead className="text-center font-black text-[10px] bg-purple-50 border-r">UTILIDAD</TableHead>

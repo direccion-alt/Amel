@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI("AIzaSyCQ_Cu2E_NYlaidhfZUWLnoVWC1V8tO_oI")
+const apiKey = process.env.GEMINI_API_KEY
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null
 
 export async function POST(request: NextRequest) {
   try {
+    if (!genAI) {
+      console.error('GEMINI_API_KEY no configurada')
+      return NextResponse.json({ error: 'GEMINI_API_KEY no configurada' }, { status: 500 })
+    }
     console.log('📸 Iniciando escaneo de ticket de combustible...')
     
     const formData = await request.formData()

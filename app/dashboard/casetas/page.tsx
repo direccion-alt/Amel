@@ -293,7 +293,7 @@ export default function CasetasPage() {
   const handleDeleteCasetaCatalogo = async (id: string, nombre: string, activo: boolean) => {
     let mensaje = `¿Eliminar la versión de "${nombre}"?`
     if (activo) {
-      mensaje = `⚠️ Esta es la versión ACTIVA de "${nombre}". ¿Estás seguro de que deseas eliminarla? Las nuevas rutas no podrán usar esta caseta.`
+      mensaje = `⚠️ Esta es la versión ACTIVA de "${nombre}". ¿Eliminarla también quitará sus asignaciones en rutas. ¿Continuar?`
     } else {
       mensaje = `¿Eliminar esta versión histórica de "${nombre}"?`
     }
@@ -302,7 +302,13 @@ export default function CasetasPage() {
     if (!confirmado) return
     setLoading(true)
     const { error } = await supabase.from("casetas_catalogo").delete().eq("id", id)
-    if (error) alert(error.message)
+    if (error) {
+      if (String(error.message).includes("ruta_casetas_caseta_id_fkey")) {
+        alert("No se puede borrar porque esta caseta esta asignada a rutas. Ejecuta el script de cascada o elimina las asignaciones.")
+      } else {
+        alert(error.message)
+      }
+    }
     else await fetchAll()
     setLoading(false)
   }
