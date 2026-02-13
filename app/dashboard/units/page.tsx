@@ -17,6 +17,21 @@ const supabaseUrl = 'https://hgkzcdmagdtjgxaniswr.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhna3pjZG1hZ2R0amd4YW5pc3dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4NDIwNjIsImV4cCI6MjA4MzQxODA2Mn0.YnZqt27VbQxxE0UqNj3RJrPJoco-xzU7e6ovWKYR5A8' 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+const parseMoney = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = typeof value === 'number' ? value : parseFloat(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+const getCostoTotal = (subtotal: any, iva: any, total: any) => {
+  const subtotalValue = parseMoney(subtotal)
+  const ivaValue = parseMoney(iva)
+  if (subtotalValue !== null || ivaValue !== null) {
+    return (subtotalValue || 0) + (ivaValue || 0)
+  }
+  return parseMoney(total)
+}
+
 export default function InventarioUnidades() {
   const [unidades, setUnidades] = useState<any[]>([])
   const [filtro, setFiltro] = useState("")
@@ -28,7 +43,8 @@ export default function InventarioUnidades() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
   const [nuevaUnidad, setNuevaUnidad] = useState({
-    economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC', costo_total: '', fecha_compra: ''
+    economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
+    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
   })
 
   const obtenerTipoUnidad = (unidad: any) => {
@@ -63,15 +79,21 @@ export default function InventarioUnidades() {
       sede: nuevaUnidad.sede,
       estatus: nuevaUnidad.estatus,
       tipo: nuevaUnidad.tipo || 'TRAC',
-      costo_total: nuevaUnidad.costo_total ? parseFloat(nuevaUnidad.costo_total) : null,
+      costo_subtotal: parseMoney(nuevaUnidad.costo_subtotal),
+      costo_iva: parseMoney(nuevaUnidad.costo_iva),
+      costo_total: getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total),
       fecha_compra: nuevaUnidad.fecha_compra || null,
+      factura_unidad_url: nuevaUnidad.factura_unidad_url || null,
       poliza_seguro_vigencia: nuevaUnidad.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: nuevaUnidad.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: nuevaUnidad.verificacion_contaminantes || null,
     }])
     if (!error) {
       setShowNewModal(false)
-      setNuevaUnidad({ economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC' })
+      setNuevaUnidad({
+        economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
+        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
+      })
       await fetchUnidades()
     } else alert(error.message)
     setLoading(false)
@@ -99,8 +121,11 @@ export default function InventarioUnidades() {
       placas: unidadEditando.placas,
       estatus: unidadEditando.estatus,
       tipo: unidadEditando.tipo || null,
-      costo_total: unidadEditando.costo_total ? parseFloat(unidadEditando.costo_total) : null,
+      costo_subtotal: parseMoney(unidadEditando.costo_subtotal),
+      costo_iva: parseMoney(unidadEditando.costo_iva),
+      costo_total: getCostoTotal(unidadEditando.costo_subtotal, unidadEditando.costo_iva, unidadEditando.costo_total),
       fecha_compra: unidadEditando.fecha_compra || null,
+      factura_unidad_url: unidadEditando.factura_unidad_url || null,
       poliza_seguro_vigencia: unidadEditando.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: unidadEditando.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: unidadEditando.verificacion_contaminantes || null,
@@ -144,6 +169,59 @@ export default function InventarioUnidades() {
     setUnidadEditando({ ...unidadEditando, [campoUrl]: publicUrl })
     await supabase.from('unidades').update({ [campoUrl]: publicUrl }).eq('economico', eco)
     fetchUnidades()
+    setUploading(null)
+  }
+
+  const handleFacturaUnidadUpload = async (e: any, isEdit: boolean) => {
+    const file = e.target.files[0]; if (!file) return
+    setUploading('factura_unidad_url')
+    const eco = isEdit ? unidadEditando?.economico : nuevaUnidad?.economico
+    const name = `${eco || 'unidad'}_factura_${Date.now()}.pdf`
+
+    const { error: uploadError } = await supabase.storage.from('factura de unidades').upload(name, file)
+    if (uploadError) {
+      setUploading(null)
+      return alert(uploadError.message)
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('factura de unidades').getPublicUrl(name)
+
+    if (isEdit) {
+      setUnidadEditando({ ...unidadEditando, factura_unidad_url: publicUrl })
+      await supabase.from('unidades').update({ factura_unidad_url: publicUrl }).eq('id', unidadEditando.id)
+    } else {
+      setNuevaUnidad({ ...nuevaUnidad, factura_unidad_url: publicUrl })
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/escanear-factura-unidad', { method: 'POST', body: formData })
+      const data = await response.json()
+      if (response.ok) {
+        const subtotal = data.subtotal ?? ''
+        const iva = data.iva ?? ''
+        if (isEdit) {
+          setUnidadEditando({
+            ...unidadEditando,
+            factura_unidad_url: publicUrl,
+            costo_subtotal: subtotal,
+            costo_iva: iva,
+          })
+        } else {
+          setNuevaUnidad({
+            ...nuevaUnidad,
+            factura_unidad_url: publicUrl,
+            costo_subtotal: subtotal,
+            costo_iva: iva,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error al escanear factura de unidad:', error)
+    }
+
+    await fetchUnidades()
     setUploading(null)
   }
 
@@ -222,10 +300,24 @@ export default function InventarioUnidades() {
                             <div className="border-b pb-2">
                               <p className={`text-[10px] ${statusSeg.color}`}>{statusSeg.texto}</p>
                             </div>
-                    {unidad.costo_total && (
-                      <div className="bg-blue-50 p-2 rounded border border-blue-200">
-                        <p className="text-[9px] text-zinc-500 font-bold">INVERSIÓN</p>
-                        <p className="text-sm font-black text-blue-600">${unidad.costo_total.toLocaleString('es-MX')}</p>
+                    {getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total) && (
+                      <div className="bg-blue-50 p-2 rounded border border-blue-200 space-y-1">
+                        <p className="text-[9px] text-zinc-500 font-bold">INVERSIÓN (ROI)</p>
+                        {unidad.costo_subtotal && (
+                          <div className="flex justify-between text-[10px] font-semibold text-zinc-600">
+                            <span>Subtotal</span>
+                            <span>${Number(unidad.costo_subtotal).toLocaleString('es-MX')}</span>
+                          </div>
+                        )}
+                        {unidad.costo_iva && (
+                          <div className="flex justify-between text-[10px] font-semibold text-zinc-600">
+                            <span>IVA 16%</span>
+                            <span>${Number(unidad.costo_iva).toLocaleString('es-MX')}</span>
+                          </div>
+                        )}
+                        <p className="text-sm font-black text-blue-600">
+                          ${Number(getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total)).toLocaleString('es-MX')}
+                        </p>
                       </div>
                     )}
                     <div className="space-y-2 text-[9px] font-black">
@@ -295,14 +387,50 @@ export default function InventarioUnidades() {
 
               {/* INVERSIÓN Y FECHA DE COMPRA */}
               <div className="p-3 bg-green-50 rounded-lg border border-green-200 space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Costo Total (ROI)</label>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Costos ROI</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input 
+                    placeholder="Subtotal" 
+                    type="number" 
+                    value={unidadEditando?.costo_subtotal || ''} 
+                    onChange={(e) => setUnidadEditando({...unidadEditando, costo_subtotal: e.target.value})} 
+                    className="font-bold"
+                  />
+                  <Input 
+                    placeholder="IVA 16%" 
+                    type="number" 
+                    value={unidadEditando?.costo_iva || ''} 
+                    onChange={(e) => setUnidadEditando({...unidadEditando, costo_iva: e.target.value})} 
+                    className="font-bold"
+                  />
+                </div>
                 <Input 
-                  placeholder="Ej: 250000" 
+                  placeholder="Total" 
                   type="number" 
-                  value={unidadEditando?.costo_total || ''} 
-                  onChange={(e) => setUnidadEditando({...unidadEditando, costo_total: e.target.value})} 
-                  className="font-bold"
+                  value={getCostoTotal(unidadEditando?.costo_subtotal, unidadEditando?.costo_iva, unidadEditando?.costo_total) || ''} 
+                  readOnly
+                  className="font-bold bg-white"
                 />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="factura-unidad"
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => handleFacturaUnidadUpload(e, true)}
+                  />
+                  <Button variant="outline" asChild>
+                    <label htmlFor="factura-unidad" className="cursor-pointer">
+                      {uploading === 'factura_unidad_url' ? <Loader2 className="animate-spin h-4 w-4" /> : <FileUp className="h-4 w-4" />}
+                    </label>
+                  </Button>
+                  {unidadEditando?.factura_unidad_url && (
+                    <Button variant="ghost" onClick={() => window.open(unidadEditando.factura_unidad_url, '_blank')}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <span className="text-[10px] font-semibold text-zinc-500">Factura unidad (IA)</span>
+                </div>
               </div>
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
@@ -383,14 +511,50 @@ export default function InventarioUnidades() {
 
               {/* INVERSIÓN Y FECHA DE COMPRA */}
               <div className="p-3 bg-green-50 rounded-lg border border-green-200 space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Costo Total (ROI)</label>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Costos ROI</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input 
+                    placeholder="Subtotal" 
+                    type="number" 
+                    value={nuevaUnidad.costo_subtotal || ''} 
+                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, costo_subtotal: e.target.value})} 
+                    className="font-bold"
+                  />
+                  <Input 
+                    placeholder="IVA 16%" 
+                    type="number" 
+                    value={nuevaUnidad.costo_iva || ''} 
+                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, costo_iva: e.target.value})} 
+                    className="font-bold"
+                  />
+                </div>
                 <Input 
-                  placeholder="Ej: 250000" 
+                  placeholder="Total" 
                   type="number" 
-                  value={nuevaUnidad.costo_total || ''} 
-                  onChange={(e) => setNuevaUnidad({...nuevaUnidad, costo_total: e.target.value})} 
-                  className="font-bold"
+                  value={getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total) || ''} 
+                  readOnly
+                  className="font-bold bg-white"
                 />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="factura-unidad-nueva"
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => handleFacturaUnidadUpload(e, false)}
+                  />
+                  <Button variant="outline" asChild>
+                    <label htmlFor="factura-unidad-nueva" className="cursor-pointer">
+                      {uploading === 'factura_unidad_url' ? <Loader2 className="animate-spin h-4 w-4" /> : <FileUp className="h-4 w-4" />}
+                    </label>
+                  </Button>
+                  {nuevaUnidad.factura_unidad_url && (
+                    <Button variant="ghost" onClick={() => window.open(nuevaUnidad.factura_unidad_url, '_blank')}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <span className="text-[10px] font-semibold text-zinc-500">Factura unidad (IA)</span>
+                </div>
               </div>
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
