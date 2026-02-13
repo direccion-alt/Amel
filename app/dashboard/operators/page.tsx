@@ -15,6 +15,15 @@ const supabaseUrl = 'https://hgkzcdmagdtjgxaniswr.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhna3pjZG1hZ2R0amd4YW5pc3dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4NDIwNjIsImV4cCI6MjA4MzQxODA2Mn0.YnZqt27VbQxxE0UqNj3RJrPJoco-xzU7e6ovWKYR5A8'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+const ALLOWED_LICENCIAS = [
+  'A - SCT',
+  'B - SCT',
+  'C - SCT',
+  'D - SCT',
+  'E - SCT',
+  'F - SCT'
+]
+
 export default function PersonalPage() {
   const [operadores, setOperadores] = useState<any[]>([])
   const [filtrados, setFiltrados] = useState<any[]>([])
@@ -112,6 +121,11 @@ export default function PersonalPage() {
     setLoading(true)
     try {
       // Limpiar campos vacíos convirtiéndolos a null
+      const licenciaValue = form.tipo_licencia?.trim() || null
+      const licenciaSanitized = licenciaValue && ALLOWED_LICENCIAS.includes(licenciaValue)
+        ? licenciaValue
+        : null
+
       const cleanedForm = {
         ...form,
         documento_numero: form.documento_numero?.trim() || null,
@@ -122,7 +136,7 @@ export default function PersonalPage() {
         fecha_contratacion: form.fecha_contratacion || null,
         tipo_personal: form.tipo_personal || null,
         // Evitar violar el CHECK de tipo_licencia en personal no operador
-        tipo_licencia: form.tipo_personal === 'Operador(a)' ? (form.tipo_licencia || null) : null,
+        tipo_licencia: form.tipo_personal === 'Operador(a)' ? licenciaSanitized : null,
         numero_licencia: form.tipo_personal === 'Operador(a)' ? (form.numero_licencia?.trim() || null) : null,
         licencia_vigencia: form.tipo_personal === 'Operador(a)' ? (form.licencia_vigencia || null) : null,
         salario: form.salario ? parseFloat(form.salario) : null,
