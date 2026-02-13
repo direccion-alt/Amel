@@ -44,7 +44,8 @@ export default function InventarioUnidades() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [nuevaUnidad, setNuevaUnidad] = useState({
     economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
+    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: '',
+    seguro_trimestres_pagados: '', seguro_total_pagado: ''
   })
 
   const obtenerTipoUnidad = (unidad: any) => {
@@ -84,6 +85,8 @@ export default function InventarioUnidades() {
       costo_total: getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total),
       fecha_compra: nuevaUnidad.fecha_compra || null,
       factura_unidad_url: nuevaUnidad.factura_unidad_url || null,
+      seguro_trimestres_pagados: nuevaUnidad.seguro_trimestres_pagados ? parseInt(nuevaUnidad.seguro_trimestres_pagados, 10) : 0,
+      seguro_total_pagado: parseMoney(nuevaUnidad.seguro_total_pagado),
       poliza_seguro_vigencia: nuevaUnidad.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: nuevaUnidad.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: nuevaUnidad.verificacion_contaminantes || null,
@@ -92,7 +95,8 @@ export default function InventarioUnidades() {
       setShowNewModal(false)
       setNuevaUnidad({
         economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
+        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: '',
+        seguro_trimestres_pagados: '', seguro_total_pagado: ''
       })
       await fetchUnidades()
     } else alert(error.message)
@@ -126,6 +130,8 @@ export default function InventarioUnidades() {
       costo_total: getCostoTotal(unidadEditando.costo_subtotal, unidadEditando.costo_iva, unidadEditando.costo_total),
       fecha_compra: unidadEditando.fecha_compra || null,
       factura_unidad_url: unidadEditando.factura_unidad_url || null,
+      seguro_trimestres_pagados: unidadEditando.seguro_trimestres_pagados ? parseInt(unidadEditando.seguro_trimestres_pagados, 10) : 0,
+      seguro_total_pagado: parseMoney(unidadEditando.seguro_total_pagado),
       poliza_seguro_vigencia: unidadEditando.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: unidadEditando.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: unidadEditando.verificacion_contaminantes || null,
@@ -436,6 +442,25 @@ export default function InventarioUnidades() {
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
                 <Input type="date" value={unidadEditando?.fecha_compra || ''} onChange={(e) => setUnidadEditando({...unidadEditando, fecha_compra: e.target.value})} />
               </div>
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Seguro (Trimestral)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Trimestres pagados"
+                    type="number"
+                    value={unidadEditando?.seguro_trimestres_pagados || ''}
+                    onChange={(e) => setUnidadEditando({...unidadEditando, seguro_trimestres_pagados: e.target.value})}
+                    className="font-bold"
+                  />
+                  <Input
+                    placeholder="Total pagado"
+                    type="number"
+                    value={unidadEditando?.seguro_total_pagado || ''}
+                    onChange={(e) => setUnidadEditando({...unidadEditando, seguro_total_pagado: e.target.value})}
+                    className="font-bold"
+                  />
+                </div>
+              </div>
 
                       {[
                 { label: 'Seguro', url: 'url_poliza_seguro', fecha: 'poliza_seguro_vigencia' },
@@ -559,6 +584,25 @@ export default function InventarioUnidades() {
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
                 <Input type="date" value={nuevaUnidad.fecha_compra || ''} onChange={(e) => setNuevaUnidad({...nuevaUnidad, fecha_compra: e.target.value})} />
+              </div>
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Seguro (Trimestral)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Trimestres pagados"
+                    type="number"
+                    value={nuevaUnidad.seguro_trimestres_pagados || ''}
+                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, seguro_trimestres_pagados: e.target.value})}
+                    className="font-bold"
+                  />
+                  <Input
+                    placeholder="Total pagado"
+                    type="number"
+                    value={nuevaUnidad.seguro_total_pagado || ''}
+                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, seguro_total_pagado: e.target.value})}
+                    className="font-bold"
+                  />
+                </div>
               </div>
 
               {[
