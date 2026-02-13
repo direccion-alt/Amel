@@ -120,8 +120,11 @@ export default function PersonalPage() {
         email: form.email?.trim() || null,
         vigencia_contrato: form.vigencia_contrato || null,
         fecha_contratacion: form.fecha_contratacion || null,
-        licencia_vigencia: form.licencia_vigencia || null,
         tipo_personal: form.tipo_personal || null,
+        // Evitar violar el CHECK de tipo_licencia en personal no operador
+        tipo_licencia: form.tipo_personal === 'Operador(a)' ? (form.tipo_licencia || null) : null,
+        numero_licencia: form.tipo_personal === 'Operador(a)' ? (form.numero_licencia?.trim() || null) : null,
+        licencia_vigencia: form.tipo_personal === 'Operador(a)' ? (form.licencia_vigencia || null) : null,
         salario: form.salario ? parseFloat(form.salario) : null,
         empresa_seguro: form.empresa_seguro?.trim() || null,
         // Solo guardar campos según tipo de personal
