@@ -42,10 +42,12 @@ export default function InventarioUnidades() {
   const [unidadEditando, setUnidadEditando] = useState<any>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
+  const [showPagoSeguroModal, setShowPagoSeguroModal] = useState(false)
+  const [pagosSeguro, setPagosSeguro] = useState<any[]>([])
+  const [nuevoPago, setNuevoPago] = useState({ monto: '', fecha_pago: '', concepto: '' })
   const [nuevaUnidad, setNuevaUnidad] = useState({
     economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: '',
-    seguro_trimestres_pagados: '', seguro_total_pagado: ''
+    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
   })
 
   const obtenerTipoUnidad = (unidad: any) => {
@@ -66,7 +68,59 @@ export default function InventarioUnidades() {
     if (data) setUnidades(data)
   }
 
+  const fetchPagosSeguro = async (unidadId: string) => {
+    const { data } = await supabase
+      .from('pagos_seguro_unidades')
+      .select('*')
+      .eq('unidad_id', unidadId)
+      .order('fecha_pago', { ascending: false })
+    if (data) setPagosSeguro(data)
+  }
+
+  const calcularTotalPagosSeguro = () => {
+    return pagosSeguro.reduce((total, pago) => total + (Number(pago.monto) || 0), 0)
+  }
+
+  const handleAgregarPagoSeguro = async () => {
+    if (!unidadEditando?.id || !nuevoPago.monto || !nuevoPago.fecha_pago) {
+      return alert('El monto y la fecha son obligatorios')
+    }
+    setLoading(true)
+    const { error } = await supabase.from('pagos_seguro_unidades').insert([{
+      unidad_id: unidadEditando.id,
+      monto: parseMoney(nuevoPago.monto),
+      fecha_pago: nuevoPago.fecha_pago,
+      concepto: nuevoPago.concepto || null
+    }])
+    if (!error) {
+      await fetchPagosSeguro(unidadEditando.id)
+      setNuevoPago({ monto: '', fecha_pago: '', concepto: '' })
+      setShowPagoSeguroModal(false)
+    } else {
+      alert('Error al registrar pago: ' + error.message)
+    }
+    setLoading(false)
+  }
+
+  const handleEliminarPagoSeguro = async (pagoId: string) => {
+    if (!confirm('¿Eliminar este pago de seguro?')) return
+    setLoading(true)
+    const { error } = await supabase.from('pagos_seguro_unidades').delete().eq('id', pagoId)
+    if (!error) {
+      await fetchPagosSeguro(unidadEditando.id)
+    } else {
+      alert('Error al eliminar pago: ' + error.message)
+    }
+    setLoading(false)
+  }
+
   useEffect(() => { fetchUnidades() }, [])
+
+  useEffect(() => {
+    if (unidadEditando?.id && showEditModal) {
+      fetchPagosSeguro(unidadEditando.id)
+    }
+  }, [unidadEditando?.id, showEditModal])
 
   const estGasModal = unidadEditando ? calcularEstadoAmbiental(unidadEditando.placas, unidadEditando.verificacion_contaminantes) : null
 
@@ -85,8 +139,6 @@ export default function InventarioUnidades() {
       costo_total: getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total),
       fecha_compra: nuevaUnidad.fecha_compra || null,
       factura_unidad_url: nuevaUnidad.factura_unidad_url || null,
-      seguro_trimestres_pagados: nuevaUnidad.seguro_trimestres_pagados ? parseInt(nuevaUnidad.seguro_trimestres_pagados, 10) : 0,
-      seguro_total_pagado: parseMoney(nuevaUnidad.seguro_total_pagado),
       poliza_seguro_vigencia: nuevaUnidad.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: nuevaUnidad.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: nuevaUnidad.verificacion_contaminantes || null,
@@ -95,8 +147,7 @@ export default function InventarioUnidades() {
       setShowNewModal(false)
       setNuevaUnidad({
         economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: '',
-        seguro_trimestres_pagados: '', seguro_total_pagado: ''
+        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
       })
       await fetchUnidades()
     } else alert(error.message)
@@ -130,8 +181,6 @@ export default function InventarioUnidades() {
       costo_total: getCostoTotal(unidadEditando.costo_subtotal, unidadEditando.costo_iva, unidadEditando.costo_total),
       fecha_compra: unidadEditando.fecha_compra || null,
       factura_unidad_url: unidadEditando.factura_unidad_url || null,
-      seguro_trimestres_pagados: unidadEditando.seguro_trimestres_pagados ? parseInt(unidadEditando.seguro_trimestres_pagados, 10) : 0,
-      seguro_total_pagado: parseMoney(unidadEditando.seguro_total_pagado),
       poliza_seguro_vigencia: unidadEditando.poliza_seguro_vigencia || null,
       verificacion_fisico_mecanica: unidadEditando.verificacion_fisico_mecanica || null,
       verificacion_contaminantes: unidadEditando.verificacion_contaminantes || null,
@@ -442,24 +491,38 @@ export default function InventarioUnidades() {
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
                 <Input type="date" value={unidadEditando?.fecha_compra || ''} onChange={(e) => setUnidadEditando({...unidadEditando, fecha_compra: e.target.value})} />
               </div>
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Seguro (Trimestral)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    placeholder="Trimestres pagados"
-                    type="number"
-                    value={unidadEditando?.seguro_trimestres_pagados || ''}
-                    onChange={(e) => setUnidadEditando({...unidadEditando, seguro_trimestres_pagados: e.target.value})}
-                    className="font-bold"
-                  />
-                  <Input
-                    placeholder="Total pagado"
-                    type="number"
-                    value={unidadEditando?.seguro_total_pagado || ''}
-                    onChange={(e) => setUnidadEditando({...unidadEditando, seguro_total_pagado: e.target.value})}
-                    className="font-bold"
-                  />
+              {/* SISTEMA DE PAGOS DE SEGURO */}
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Pagos de Seguro</label>
+                  <Button size="sm" variant="outline" onClick={() => setShowPagoSeguroModal(true)}>
+                    <PlusCircle className="h-3 w-3 mr-1" /> Registrar pago
+                  </Button>
                 </div>
+                <div className="bg-white rounded p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {pagosSeguro.length === 0 ? (
+                    <p className="text-[10px] text-zinc-400 text-center py-2">Sin pagos registrados</p>
+                  ) : (
+                    pagosSeguro.map((pago) => (
+                      <div key={pago.id} className="flex justify-between items-center p-2 bg-zinc-50 rounded border text-[10px]">
+                        <div className="flex-1">
+                          <p className="font-bold text-zinc-900">${Number(pago.monto).toLocaleString('es-MX')}</p>
+                          <p className="text-zinc-500">{new Date(pago.fecha_pago).toLocaleDateString('es-MX')}</p>
+                          {pago.concepto && <p className="text-[9px] text-zinc-400 italic">{pago.concepto}</p>}
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleEliminarPagoSeguro(pago.id) }}>
+                          <Trash2 className="h-3 w-3 text-red-500" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {pagosSeguro.length > 0 && (
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase">Total Pagado:</span>
+                    <span className="text-sm font-black text-amber-600">${calcularTotalPagosSeguro().toLocaleString('es-MX')}</span>
+                  </div>
+                )}
               </div>
 
                       {[
@@ -495,6 +558,55 @@ export default function InventarioUnidades() {
                 <Trash2 className="h-4 w-4 mr-2" /> ELIMINAR UNIDAD
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* MODAL PARA REGISTRAR PAGO DE SEGURO */}
+        <Dialog open={showPagoSeguroModal} onOpenChange={setShowPagoSeguroModal}>
+          <DialogContent className="bg-white max-w-sm">
+            <DialogHeader className="border-b pb-2">
+              <DialogTitle className="font-black uppercase italic">Registrar Pago de Seguro</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Monto del pago *</label>
+                <Input
+                  type="number"
+                  placeholder="Ej: 5000"
+                  value={nuevoPago.monto}
+                  onChange={(e) => setNuevoPago({...nuevoPago, monto: e.target.value})}
+                  className="font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha del pago *</label>
+                <Input
+                  type="date"
+                  value={nuevoPago.fecha_pago}
+                  onChange={(e) => setNuevoPago({...nuevoPago, fecha_pago: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Concepto (opcional)</label>
+                <Input
+                  placeholder="Ej: Pago completo Q1 2025, Pago proporcional - unidad nueva"
+                  value={nuevoPago.concepto}
+                  onChange={(e) => setNuevoPago({...nuevoPago, concepto: e.target.value})}
+                  className="text-[11px]"
+                />
+                <p className="text-[9px] text-zinc-400 mt-1 italic">Explica si es pago completo o proporcional</p>
+              </div>
+            </div>
+            <DialogFooter className="border-t pt-4">
+              <Button
+                className="w-full font-black"
+                style={{backgroundColor: AMEL_YELLOW}}
+                onClick={handleAgregarPagoSeguro}
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'GUARDAR PAGO'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -585,25 +697,7 @@ export default function InventarioUnidades() {
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Fecha de Compra</label>
                 <Input type="date" value={nuevaUnidad.fecha_compra || ''} onChange={(e) => setNuevaUnidad({...nuevaUnidad, fecha_compra: e.target.value})} />
               </div>
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Seguro (Trimestral)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    placeholder="Trimestres pagados"
-                    type="number"
-                    value={nuevaUnidad.seguro_trimestres_pagados || ''}
-                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, seguro_trimestres_pagados: e.target.value})}
-                    className="font-bold"
-                  />
-                  <Input
-                    placeholder="Total pagado"
-                    type="number"
-                    value={nuevaUnidad.seguro_total_pagado || ''}
-                    onChange={(e) => setNuevaUnidad({...nuevaUnidad, seguro_total_pagado: e.target.value})}
-                    className="font-bold"
-                  />
-                </div>
-              </div>
+
 
               {[
                 { label: 'Seguro', url: 'url_poliza_seguro', fecha: 'poliza_seguro_vigencia' },
