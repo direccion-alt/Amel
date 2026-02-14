@@ -17,14 +17,33 @@ CREATE INDEX IF NOT EXISTS idx_pagos_seguro_fecha ON public.pagos_seguro_unidade
 -- RLS policies
 ALTER TABLE public.pagos_seguro_unidades ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden ver pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios anonimos pueden ver pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios autenticados pueden insertar pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios anonimos pueden insertar pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios autenticados pueden actualizar pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios anonimos pueden actualizar pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios autenticados pueden eliminar pagos de seguro" ON public.pagos_seguro_unidades;
+DROP POLICY IF EXISTS "Usuarios anonimos pueden eliminar pagos de seguro" ON public.pagos_seguro_unidades;
+
 CREATE POLICY "Usuarios autenticados pueden ver pagos de seguro"
   ON public.pagos_seguro_unidades FOR SELECT
   TO authenticated
   USING (true);
 
+CREATE POLICY "Usuarios anonimos pueden ver pagos de seguro"
+  ON public.pagos_seguro_unidades FOR SELECT
+  TO anon
+  USING (true);
+
 CREATE POLICY "Usuarios autenticados pueden insertar pagos de seguro"
   ON public.pagos_seguro_unidades FOR INSERT
   TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Usuarios anonimos pueden insertar pagos de seguro"
+  ON public.pagos_seguro_unidades FOR INSERT
+  TO anon
   WITH CHECK (true);
 
 CREATE POLICY "Usuarios autenticados pueden actualizar pagos de seguro"
@@ -33,7 +52,18 @@ CREATE POLICY "Usuarios autenticados pueden actualizar pagos de seguro"
   USING (true)
   WITH CHECK (true);
 
+CREATE POLICY "Usuarios anonimos pueden actualizar pagos de seguro"
+  ON public.pagos_seguro_unidades FOR UPDATE
+  TO anon
+  USING (true)
+  WITH CHECK (true);
+
 CREATE POLICY "Usuarios autenticados pueden eliminar pagos de seguro"
   ON public.pagos_seguro_unidades FOR DELETE
   TO authenticated
+  USING (true);
+
+CREATE POLICY "Usuarios anonimos pueden eliminar pagos de seguro"
+  ON public.pagos_seguro_unidades FOR DELETE
+  TO anon
   USING (true);

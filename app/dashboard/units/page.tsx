@@ -32,6 +32,13 @@ const getCostoTotal = (subtotal: any, iva: any, total: any) => {
   return parseMoney(total)
 }
 
+const getCostoTotalReal = (subtotal: any, iva: any, total: any, efectivo: any) => {
+  const fiscal = getCostoTotal(subtotal, iva, total)
+  const efectivoValue = parseMoney(efectivo)
+  if (fiscal === null && efectivoValue === null) return null
+  return (fiscal || 0) + (efectivoValue || 0)
+}
+
 export default function InventarioUnidades() {
   const [unidades, setUnidades] = useState<any[]>([])
   const [filtro, setFiltro] = useState("")
@@ -47,7 +54,7 @@ export default function InventarioUnidades() {
   const [nuevoPago, setNuevoPago] = useState({ monto: '', fecha_pago: '', concepto: '' })
   const [nuevaUnidad, setNuevaUnidad] = useState({
     economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-    costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
+    costo_subtotal: '', costo_iva: '', costo_total: '', costo_efectivo: '', fecha_compra: '', factura_unidad_url: ''
   })
 
   const obtenerTipoUnidad = (unidad: any) => {
@@ -137,6 +144,7 @@ export default function InventarioUnidades() {
       costo_subtotal: parseMoney(nuevaUnidad.costo_subtotal),
       costo_iva: parseMoney(nuevaUnidad.costo_iva),
       costo_total: getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total),
+      costo_efectivo: parseMoney(nuevaUnidad.costo_efectivo),
       fecha_compra: nuevaUnidad.fecha_compra || null,
       factura_unidad_url: nuevaUnidad.factura_unidad_url || null,
       poliza_seguro_vigencia: nuevaUnidad.poliza_seguro_vigencia || null,
@@ -147,7 +155,7 @@ export default function InventarioUnidades() {
       setShowNewModal(false)
       setNuevaUnidad({
         economico: '', placas: '', serie_vin: '', sede: 'TIJUANA', estatus: 'Activo', tipo: 'TRAC',
-        costo_subtotal: '', costo_iva: '', costo_total: '', fecha_compra: '', factura_unidad_url: ''
+        costo_subtotal: '', costo_iva: '', costo_total: '', costo_efectivo: '', fecha_compra: '', factura_unidad_url: ''
       })
       await fetchUnidades()
     } else alert(error.message)
@@ -179,6 +187,7 @@ export default function InventarioUnidades() {
       costo_subtotal: parseMoney(unidadEditando.costo_subtotal),
       costo_iva: parseMoney(unidadEditando.costo_iva),
       costo_total: getCostoTotal(unidadEditando.costo_subtotal, unidadEditando.costo_iva, unidadEditando.costo_total),
+      costo_efectivo: parseMoney(unidadEditando.costo_efectivo),
       fecha_compra: unidadEditando.fecha_compra || null,
       factura_unidad_url: unidadEditando.factura_unidad_url || null,
       poliza_seguro_vigencia: unidadEditando.poliza_seguro_vigencia || null,
@@ -355,7 +364,7 @@ export default function InventarioUnidades() {
                             <div className="border-b pb-2">
                               <p className={`text-[10px] ${statusSeg.color}`}>{statusSeg.texto}</p>
                             </div>
-                    {getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total) && (
+                    {(getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total) || unidad.costo_efectivo) && (
                       <div className="bg-blue-50 p-2 rounded border border-blue-200 space-y-1">
                         <p className="text-[9px] text-zinc-500 font-bold">INVERSIÓN (ROI)</p>
                         {unidad.costo_subtotal && (
@@ -370,9 +379,22 @@ export default function InventarioUnidades() {
                             <span>${Number(unidad.costo_iva).toLocaleString('es-MX')}</span>
                           </div>
                         )}
-                        <p className="text-sm font-black text-blue-600">
-                          ${Number(getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total)).toLocaleString('es-MX')}
-                        </p>
+                        {getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total) && (
+                          <p className="text-sm font-black text-blue-600">
+                            ${Number(getCostoTotal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total)).toLocaleString('es-MX')}
+                          </p>
+                        )}
+                        {unidad.costo_efectivo && (
+                          <div className="flex justify-between text-[10px] font-semibold text-zinc-600">
+                            <span>Efectivo</span>
+                            <span>${Number(unidad.costo_efectivo).toLocaleString('es-MX')}</span>
+                          </div>
+                        )}
+                        {getCostoTotalReal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total, unidad.costo_efectivo) && (
+                          <p className="text-sm font-black text-amber-600">
+                            ${Number(getCostoTotalReal(unidad.costo_subtotal, unidad.costo_iva, unidad.costo_total, unidad.costo_efectivo)).toLocaleString('es-MX')}
+                          </p>
+                        )}
                       </div>
                     )}
                     <div className="space-y-2 text-[9px] font-black">
@@ -465,6 +487,20 @@ export default function InventarioUnidades() {
                   value={getCostoTotal(unidadEditando?.costo_subtotal, unidadEditando?.costo_iva, unidadEditando?.costo_total) || ''} 
                   readOnly
                   className="font-bold bg-white"
+                />
+                <Input 
+                  placeholder="Pago en efectivo" 
+                  type="number" 
+                  value={unidadEditando?.costo_efectivo || ''} 
+                  onChange={(e) => setUnidadEditando({...unidadEditando, costo_efectivo: e.target.value})} 
+                  className="font-bold"
+                />
+                <Input 
+                  placeholder="Total real (fiscal + efectivo)" 
+                  type="number" 
+                  value={getCostoTotalReal(unidadEditando?.costo_subtotal, unidadEditando?.costo_iva, unidadEditando?.costo_total, unidadEditando?.costo_efectivo) || ''} 
+                  readOnly
+                  className="font-bold bg-amber-50"
                 />
                 <div className="flex items-center gap-2">
                   <input
@@ -671,6 +707,20 @@ export default function InventarioUnidades() {
                   value={getCostoTotal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total) || ''} 
                   readOnly
                   className="font-bold bg-white"
+                />
+                <Input 
+                  placeholder="Pago en efectivo" 
+                  type="number" 
+                  value={nuevaUnidad.costo_efectivo || ''} 
+                  onChange={(e) => setNuevaUnidad({...nuevaUnidad, costo_efectivo: e.target.value})} 
+                  className="font-bold"
+                />
+                <Input 
+                  placeholder="Total real (fiscal + efectivo)" 
+                  type="number" 
+                  value={getCostoTotalReal(nuevaUnidad.costo_subtotal, nuevaUnidad.costo_iva, nuevaUnidad.costo_total, nuevaUnidad.costo_efectivo) || ''} 
+                  readOnly
+                  className="font-bold bg-amber-50"
                 />
                 <div className="flex items-center gap-2">
                   <input
