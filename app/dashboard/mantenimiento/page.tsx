@@ -192,7 +192,7 @@ export default function MantenimientoAmel() {
           .filter((p) => p.descripcion)
           .map((p) => ({
             mantenimiento_id: mantenimientoCreado.id,
-            economico: form.economico,
+            economico: p.economico || form.economico,
             fecha_servicio: form.fecha_servicio,
             pieza: p.descripcion,
             cantidad: Number(p.cantidad) || 1,
@@ -340,6 +340,7 @@ export default function MantenimientoAmel() {
       if (partidasDetectadas.length > 0) {
         setPartidas(partidasDetectadas.map((p: any) => ({
           descripcion: p.descripcion || '',
+          economico: form.economico,
           cantidad: p.cantidad || 1,
           precio_unitario: p.precio_unitario || p.total || 0,
           tipo_mantenimiento: p.tipo_mantenimiento || datos.tipo_mantenimiento || form.tipo_mantenimiento,
@@ -596,17 +597,19 @@ export default function MantenimientoAmel() {
             {/* FILA 1: DATOS BÁSICOS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="text-xs font-bold text-zinc-700 uppercase mb-2 block">Unidad *</label>
+                <label className="text-xs font-bold text-zinc-700 uppercase mb-2 block">Unidad principal *</label>
                 <select 
                   value={form.economico} 
                   onChange={(e) => setForm({...form, economico: e.target.value})}
                   className="w-full border-2 rounded-xl px-4 py-3 font-bold"
                 >
                   <option value="">Seleccionar...</option>
+                  <option value="VARIAS">VARIAS</option>
                   {unidades.map(u => (
                     <option key={u.economico} value={u.economico}>{u.economico}</option>
                   ))}
                 </select>
+                <p className="text-[10px] text-zinc-500 mt-1">Si la factura incluye varias unidades, selecciona VARIAS y asigna por pieza.</p>
               </div>
 
               <div>
@@ -715,7 +718,7 @@ export default function MantenimientoAmel() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-black uppercase">Detalle por pieza/servicio</h3>
-                  <p className="text-xs text-zinc-500">Registra cada pieza con su costo con IVA</p>
+                  <p className="text-xs text-zinc-500">Registra cada pieza con su costo con IVA y asigna unidad por pieza</p>
                 </div>
                 <Button
                   variant="outline"
@@ -725,6 +728,7 @@ export default function MantenimientoAmel() {
                       ...partidas,
                       {
                         descripcion: '',
+                        economico: form.economico,
                         cantidad: 1,
                         precio_unitario: '',
                         tipo_mantenimiento: form.tipo_mantenimiento,
@@ -748,8 +752,8 @@ export default function MantenimientoAmel() {
                     const totalConIva = (cantidad * precio * 1.16).toFixed(2)
 
                     return (
-                      <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-                        <div className="md:col-span-4">
+                      <div key={idx} className="space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-center">
                           <Input
                             placeholder="Pieza / Servicio"
                             value={p.descripcion}
@@ -760,8 +764,23 @@ export default function MantenimientoAmel() {
                             }}
                             className="h-10"
                           />
+                          <select
+                            className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
+                            value={p.economico || ''}
+                            onChange={(e) => {
+                              const next = [...partidas]
+                              next[idx] = { ...next[idx], economico: e.target.value }
+                              setPartidas(next)
+                            }}
+                          >
+                            <option value="">Unidad (usa principal)</option>
+                            <option value="VARIAS">VARIAS</option>
+                            {unidades.map(u => (
+                              <option key={`${u.economico}-${idx}`} value={u.economico}>{u.economico}</option>
+                            ))}
+                          </select>
                         </div>
-                        <div className="md:col-span-2">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
                           <Input
                             type="number"
                             placeholder="Cant."
@@ -773,8 +792,6 @@ export default function MantenimientoAmel() {
                             }}
                             className="h-10"
                           />
-                        </div>
-                        <div className="md:col-span-2">
                           <Input
                             type="number"
                             placeholder="$ Unitario"
@@ -786,8 +803,6 @@ export default function MantenimientoAmel() {
                             }}
                             className="h-10"
                           />
-                        </div>
-                        <div className="md:col-span-2">
                           <select
                             className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
                             value={p.tipo_mantenimiento}
@@ -802,8 +817,6 @@ export default function MantenimientoAmel() {
                             <option value="EMERGENCIA">EMERGENCIA</option>
                             <option value="REVISION">REVISION</option>
                           </select>
-                        </div>
-                        <div className="md:col-span-2">
                           <select
                             className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
                             value={p.categoria}
@@ -823,7 +836,7 @@ export default function MantenimientoAmel() {
                             <option value="OTRO">OTRO</option>
                           </select>
                         </div>
-                        <div className="md:col-span-12 flex items-center justify-between bg-zinc-50 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between bg-zinc-50 rounded-lg px-3 py-2">
                           <span className="text-xs font-bold text-zinc-600">Total con IVA:</span>
                           <span className="text-sm font-black text-zinc-900">${totalConIva}</span>
                           <Button
@@ -1056,6 +1069,7 @@ export default function MantenimientoAmel() {
                     {detallePiezas.map((p) => (
                       <div key={p.id} className="flex flex-col md:flex-row md:items-center md:justify-between bg-zinc-50 p-3 rounded-lg">
                         <div className="text-sm font-bold">{p.pieza}</div>
+                        <div className="text-xs text-zinc-500">Unidad: {p.economico || verDetalle.economico}</div>
                         <div className="text-xs text-zinc-600">{p.cantidad} x ${Number(p.precio_unitario || 0).toFixed(2)}</div>
                         <div className="text-xs text-zinc-600">{p.tipo_mantenimiento} · {p.categoria}</div>
                         <div className="text-sm font-black text-zinc-900">${Number(p.total_con_iva || 0).toFixed(2)}</div>
