@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Box, FileUp, PlusCircle, ClipboardList, Trash2, FileText } from "lucide-react"
+import { Box, FileUp, PlusCircle, ClipboardList, Trash2, FileText, Eye } from "lucide-react"
 
 const AMEL_YELLOW = "#FFDE18"
 const supabaseUrl = "https://hgkzcdmagdtjgxaniswr.supabase.co"
@@ -62,7 +62,10 @@ export default function ActivosPage() {
   const [showNuevaFactura, setShowNuevaFactura] = useState(false)
   const [showMovimiento, setShowMovimiento] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
+  const [showDetalleFactura, setShowDetalleFactura] = useState(false)
   const [activoSeleccionado, setActivoSeleccionado] = useState<any>(null)
+  const [facturaSeleccionada, setFacturaSeleccionada] = useState<any>(null)
+  const [facturaItemsDetalle, setFacturaItemsDetalle] = useState<any[]>([])
 
   const [archivoResponsiva, setArchivoResponsiva] = useState<File | null>(null)
 
@@ -122,6 +125,15 @@ export default function ActivosPage() {
       .eq("activo_id", activoId)
       .order("fecha_movimiento", { ascending: false })
     if (data) setMovimientos(data)
+  }
+
+  const fetchFacturaItems = async (facturaId: string) => {
+    const { data } = await supabase
+      .from("facturas_activos_items")
+      .select("*")
+      .eq("factura_id", facturaId)
+      .order("created_at", { ascending: true })
+    if (data) setFacturaItemsDetalle(data)
   }
 
   useEffect(() => {
@@ -308,6 +320,22 @@ export default function ActivosPage() {
 
   const getFacturaTotals = () => {
     return facturaItems.reduce(
+      (acc, item) => {
+        const subtotal = parseMoney(item.subtotal) || 0
+        const iva = parseMoney(item.iva) || 0
+        const total = getItemTotal(item.subtotal, item.iva, item.total) || 0
+        return {
+          subtotal: acc.subtotal + subtotal,
+          iva: acc.iva + iva,
+          total: acc.total + total,
+        }
+      },
+      { subtotal: 0, iva: 0, total: 0 }
+    )
+  }
+
+  const getFacturaDetalleTotals = () => {
+    return facturaItemsDetalle.reduce(
       (acc, item) => {
         const subtotal = parseMoney(item.subtotal) || 0
         const iva = parseMoney(item.iva) || 0
@@ -509,6 +537,7 @@ export default function ActivosPage() {
                   <TableHead>Telefono</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
                   <TableHead className="text-center">Total (con IVA)</TableHead>
+                  <TableHead className="text-center">Factura</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -519,6 +548,19 @@ export default function ActivosPage() {
                     <TableCell className="text-center">{f.fecha_compra || "-"}</TableCell>
                     <TableCell className="text-center font-black text-green-600">
                       {f.total ? `$${Number(f.total).toLocaleString("es-MX")}` : "-"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          setFacturaSeleccionada(f)
+                          await fetchFacturaItems(f.id)
+                          setShowDetalleFactura(true)
+                        }}
+                      >
+                        <Eye className="h-4 w-4 text-blue-600" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -685,7 +727,7 @@ export default function ActivosPage() {
 
       {/* Modal nueva factura */}
       <Dialog open={showNuevaFactura} onOpenChange={setShowNuevaFactura}>
-        <DialogContent className="max-w-4xl bg-white">
+        <DialogContent className="max-w-5xl bg-white">
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">Nueva factura</DialogTitle>
           </DialogHeader>
@@ -832,6 +874,61 @@ export default function ActivosPage() {
               GUARDAR FACTURA
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal detalle factura */}
+      <Dialog open={showDetalleFactura} onOpenChange={setShowDetalleFactura}>
+        <DialogContent className="max-w-4xl bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black uppercase">Detalle de factura</DialogTitle>
+          </DialogHeader>
+          {facturaSeleccionada && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="font-bold">Proveedor:</span> {facturaSeleccionada.proveedor || "-"}</div>
+                <div><span className="font-bold">Telefono:</span> {facturaSeleccionada.telefono_proveedor || "-"}</div>
+                <div><span className="font-bold">Fecha:</span> {facturaSeleccionada.fecha_compra || "-"}</div>
+                <div><span className="font-bold">Subtotal:</span> ${Number(getFacturaDetalleTotals().subtotal || 0).toLocaleString("es-MX")}</div>
+                <div><span className="font-bold">IVA:</span> ${Number(getFacturaDetalleTotals().iva || 0).toLocaleString("es-MX")}</div>
+                <div><span className="font-bold">Total:</span> ${Number(getFacturaDetalleTotals().total || 0).toLocaleString("es-MX")}</div>
+                {facturaSeleccionada.factura_url && (
+                  <div className="col-span-2">
+                    <a className="text-blue-600 text-xs underline" href={facturaSeleccionada.factura_url} target="_blank" rel="noreferrer">
+                      Ver factura
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-sm font-black uppercase">Articulos</h4>
+                {facturaItemsDetalle.length === 0 ? (
+                  <div className="text-xs text-zinc-500">Sin articulos</div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {facturaItemsDetalle.map((item) => (
+                      <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border rounded-lg p-2">
+                        <div className="md:col-span-2 text-xs font-bold">{item.categoria || "-"}</div>
+                        <div className="md:col-span-2 text-xs">Cant: {item.cantidad || 0}</div>
+                        <div className="md:col-span-4 text-xs">{item.descripcion || "-"}</div>
+                        <div className="md:col-span-2 text-xs">Sub: ${Number(item.subtotal || 0).toLocaleString("es-MX")}</div>
+                        <div className="md:col-span-1 text-xs">IVA: ${Number(item.iva || 0).toLocaleString("es-MX")}</div>
+                        <div className="md:col-span-1 text-xs font-bold text-right">${Number(getItemTotal(item.subtotal, item.iva, item.total) || 0).toLocaleString("es-MX")}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
+                <div className="text-xs font-bold uppercase">Total con IVA</div>
+                <div className="text-2xl font-black">
+                  ${Number(getFacturaDetalleTotals().total).toLocaleString("es-MX")}
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
