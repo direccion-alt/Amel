@@ -467,6 +467,7 @@ export default function MantenimientoAmel() {
                 >
                   <option value="ALL">Todas</option>
                   <option value="REFACCIONES">REFACCIONES</option>
+                  <option value="FERRETERIA">FERRETERIA</option>
                   <option value="MANO DE OBRA">MANO DE OBRA</option>
                   <option value="VULCANIZADORA">VULCANIZADORA</option>
                   <option value="ACEITE Y FILTROS">ACEITE Y FILTROS</option>
@@ -659,6 +660,7 @@ export default function MantenimientoAmel() {
                 >
                   <option value="ACEITE Y FILTROS">ACEITE Y FILTROS</option>
                   <option value="REFACCIONES">REFACCIONES</option>
+                  <option value="FERRETERIA">FERRETERIA</option>
                   <option value="MANO DE OBRA">MANO DE OBRA</option>
                   <option value="VULCANIZADORA">VULCANIZADORA</option>
                   <option value="SUSPENSION">SUSPENSIÓN</option>
@@ -827,6 +829,7 @@ export default function MantenimientoAmel() {
                             }}
                           >
                             <option value="REFACCIONES">REFACCIONES</option>
+                            <option value="FERRETERIA">FERRETERIA</option>
                             <option value="MANO DE OBRA">MANO DE OBRA</option>
                             <option value="VULCANIZADORA">VULCANIZADORA</option>
                             <option value="ACEITE Y FILTROS">ACEITE Y FILTROS</option>

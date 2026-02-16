@@ -20,6 +20,7 @@ import {
   UserCheck,
   MapPin as RoadIcon,
   DollarSign,
+  Box,
 } from "lucide-react"
 import { useState } from "react"
 import type { Profile } from "@/lib/types"
@@ -37,6 +38,7 @@ const adminLinks = [
   { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },
   { key: "trips", href: "/dashboard/trips", label: "Logística", icon: RoadIcon },
   { key: "analisis", href: "/dashboard/analisis-financiero", label: "Análisis Financiero", icon: DollarSign },
+  { key: "activos", href: "/dashboard/activos", label: "Equipo y Activo", icon: Box },
   { key: "mantenimiento", href: "/dashboard/mantenimiento", label: "Mantenimiento", icon: Wrench },
   { key: "tracking", href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
   { key: "users", href: "/dashboard/users", label: "Usuarios", icon: Users },
@@ -52,6 +54,7 @@ const userLinks = [
   { key: "control_diesel", href: "/dashboard/combustible", label: "Control de Diesel", icon: Fuel },
   { key: "trips", href: "/dashboard/trips", label: "Logística", icon: RoadIcon },
   { key: "analisis", href: "/dashboard/analisis-financiero", label: "Análisis Financiero", icon: DollarSign },
+  { key: "activos", href: "/dashboard/activos", label: "Equipo y Activo", icon: Box },
   { key: "mantenimiento", href: "/dashboard/mantenimiento", label: "Mantenimiento", icon: Wrench },
   { key: "tracking", href: "/dashboard/tracking", label: "Rastreo GPS", icon: MapPin },
 ]

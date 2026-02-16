@@ -57,7 +57,7 @@ Analiza esta factura/ticket de mantenimiento y extrae la siguiente información 
   "subtotal": "Subtotal antes de IVA (solo número)",
   "iva": "Monto del IVA (solo número)",
   "monto_total": "Monto total a pagar (solo número)",
-  "categoria_sugerida": "Categoría del servicio: ACEITE Y FILTROS, REFACCIONES, MANO DE OBRA, VULCANIZADORA, SUSPENSION, FRENOS, ELECTRICO, u OTRO",
+  "categoria_sugerida": "Categoría del servicio: ACEITE Y FILTROS, REFACCIONES, FERRETERIA, MANO DE OBRA, VULCANIZADORA, SUSPENSION, FRENOS, ELECTRICO, u OTRO",
   "tipo_mantenimiento": "PREVENTIVO, CORRECTIVO, EMERGENCIA o REVISION",
   "conceptos": ["Lista de conceptos/servicios realizados"],
   "partidas": [
@@ -67,7 +67,7 @@ Analiza esta factura/ticket de mantenimiento y extrae la siguiente información 
       "precio_unitario": 0,
       "total": 0,
       "tipo_mantenimiento": "PREVENTIVO | CORRECTIVO | EMERGENCIA | REVISION",
-      "categoria": "ACEITE Y FILTROS | REFACCIONES | MANO DE OBRA | VULCANIZADORA | SUSPENSION | FRENOS | ELECTRICO | OTRO"
+      "categoria": "ACEITE Y FILTROS | REFACCIONES | FERRETERIA | MANO DE OBRA | VULCANIZADORA | SUSPENSION | FRENOS | ELECTRICO | OTRO"
     }
   ],
   "notas": "Observaciones adicionales o garantías mencionadas"
@@ -84,6 +84,7 @@ INSTRUCCIONES IMPORTANTES:
 - Si ves "LLANTAS", "NEUMÁTICOS" → categoría VULCANIZADORA
 - Si ves "SUSPENSIÓN", "AMORTIGUADORES" → categoría SUSPENSION
 - Si ves "BATERÍA", "ALTERNADOR", "LUCES" → categoría ELECTRICO
+- Si ves "FERRETERIA", "TORNILLERIA", "HERRAMIENTA" → categoría FERRETERIA
 
 Responde ÚNICAMENTE con el JSON, sin explicaciones adicionales.
 `

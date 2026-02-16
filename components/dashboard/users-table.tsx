@@ -37,6 +37,7 @@ export function UsersTable({ users, units, userUnits }: UsersTableProps) {
     { key: "control_diesel", label: "Control de Diesel" },
     { key: "trips", label: "Logística" },
     { key: "analisis", label: "Análisis Financiero" },
+    { key: "activos", label: "Equipo y Activo" },
     { key: "mantenimiento", label: "Mantenimiento" },
     { key: "tracking", label: "Rastreo GPS" },
     { key: "users", label: "Usuarios" },
