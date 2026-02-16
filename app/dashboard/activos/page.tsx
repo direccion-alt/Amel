@@ -875,7 +875,7 @@ export default function ActivosPage() {
       <Dialog open={showNuevaFactura} onOpenChange={(open) => {
         if (!open) handleCancelarEdicionFactura()
       }}>
-        <DialogContent className="w-[95vw] max-w-7xl bg-white max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-screen max-w-none md:w-[95vw] md:max-w-7xl bg-white max-h-[95vh] overflow-y-auto p-6" style={{ width: "95vw", maxWidth: "1400px" }}>
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">
               {editingFacturaId ? "Editar factura" : "Nueva factura"}
@@ -1022,7 +1022,7 @@ export default function ActivosPage() {
                     </div>
                   ))}
                 </div>
-              )}}
+              )}
             </div>
 
             <div className="bg-zinc-50 border rounded-lg p-3 text-xs">
@@ -1061,7 +1061,7 @@ export default function ActivosPage() {
 
       {/* Modal detalle factura */}
       <Dialog open={showDetalleFactura} onOpenChange={setShowDetalleFactura}>
-        <DialogContent className="w-[95vw] max-w-7xl bg-white max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-screen max-w-none md:w-[95vw] md:max-w-7xl bg-white max-h-[95vh] overflow-y-auto p-6" style={{ width: "95vw", maxWidth: "1400px" }}>
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">Detalle de factura</DialogTitle>
           </DialogHeader>
