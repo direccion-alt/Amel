@@ -875,7 +875,7 @@ export default function ActivosPage() {
       <Dialog open={showNuevaFactura} onOpenChange={(open) => {
         if (!open) handleCancelarEdicionFactura()
       }}>
-        <DialogContent className="max-w-6xl bg-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-7xl bg-white max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">
               {editingFacturaId ? "Editar factura" : "Nueva factura"}
@@ -929,12 +929,12 @@ export default function ActivosPage() {
               {facturaItems.length === 0 ? (
                 <div className="text-xs text-zinc-500">Sin articulos</div>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                <div className="space-y-2 max-h-96 overflow-y-auto">
                   {facturaItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border rounded-lg p-2">
-                      <div className="md:col-span-2">
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center border rounded-lg p-3 bg-white hover:bg-zinc-50">
+                      <div className="col-span-2">
                         <select
-                          className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
+                          className="w-full h-9 text-xs font-bold p-2 rounded border bg-white"
                           value={item.categoria}
                           onChange={(e) => {
                             const next = [...facturaItems]
@@ -951,10 +951,11 @@ export default function ActivosPage() {
                           <option value="OTRO">OTRO</option>
                         </select>
                       </div>
-                      <div className="md:col-span-2">
+                      <div className="col-span-1">
                         <Input
                           type="number"
-                          placeholder="Cantidad"
+                          placeholder="Cant"
+                          className="text-xs h-9"
                           value={item.cantidad}
                           onChange={(e) => {
                             const next = [...facturaItems]
@@ -963,9 +964,10 @@ export default function ActivosPage() {
                           }}
                         />
                       </div>
-                      <div className="md:col-span-4">
+                      <div className="col-span-4">
                         <Input
-                          placeholder="Descripcion"
+                          placeholder="Descripcion del articulo"
+                          className="text-xs h-9"
                           value={item.descripcion}
                           onChange={(e) => {
                             const next = [...facturaItems]
@@ -974,10 +976,11 @@ export default function ActivosPage() {
                           }}
                         />
                       </div>
-                      <div className="md:col-span-2">
+                      <div className="col-span-1">
                         <Input
                           type="number"
-                          placeholder="Subtotal"
+                          placeholder="Sub"
+                          className="text-xs h-9"
                           value={item.subtotal}
                           onChange={(e) => {
                             const next = [...facturaItems]
@@ -986,10 +989,11 @@ export default function ActivosPage() {
                           }}
                         />
                       </div>
-                      <div className="md:col-span-1">
+                      <div className="col-span-1">
                         <Input
                           type="number"
                           placeholder="IVA"
+                          className="text-xs h-9"
                           value={item.iva}
                           onChange={(e) => {
                             const next = [...facturaItems]
@@ -998,13 +1002,27 @@ export default function ActivosPage() {
                           }}
                         />
                       </div>
-                      <div className="md:col-span-1 text-right text-xs font-bold">
-                        ${Number(getItemTotal(item.subtotal, item.iva, item.total) || 0).toLocaleString("es-MX")}
+                      <div className="col-span-2 text-right">
+                        <div className="text-xs font-bold bg-green-50 p-2 rounded border border-green-200">
+                          ${Number(getItemTotal(item.subtotal, item.iva, item.total) || 0).toLocaleString("es-MX")}
+                        </div>
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const next = facturaItems.filter((_, i) => i !== idx)
+                            setFacturaItems(next)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
+              )}}
             </div>
 
             <div className="bg-zinc-50 border rounded-lg p-3 text-xs">
@@ -1043,7 +1061,7 @@ export default function ActivosPage() {
 
       {/* Modal detalle factura */}
       <Dialog open={showDetalleFactura} onOpenChange={setShowDetalleFactura}>
-        <DialogContent className="max-w-5xl bg-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-7xl bg-white max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">Detalle de factura</DialogTitle>
           </DialogHeader>
