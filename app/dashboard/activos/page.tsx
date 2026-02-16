@@ -75,6 +75,7 @@ export default function ActivosPage() {
   const [activoSeleccionado, setActivoSeleccionado] = useState<any>(null)
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<any>(null)
   const [facturaItemsDetalle, setFacturaItemsDetalle] = useState<any[]>([])
+  const [editingFacturaId, setEditingFacturaId] = useState<string | null>(null)
 
   const [archivoResponsiva, setArchivoResponsiva] = useState<File | null>(null)
 
@@ -368,10 +369,12 @@ export default function ActivosPage() {
     try {
       const totals = getFacturaTotals()
       const descripcionGeneral = getDescripcionGeneral(facturaItems)
-      const { data: factura, error: facturaError } = await supabase
-        .from("facturas_activos")
-        .insert([
-          {
+
+      if (editingFacturaId) {
+        // Modo edición: actualizar factura existente
+        const { error: updateError } = await supabase
+          .from("facturas_activos")
+          .update({
             proveedor: facturaForm.proveedor || null,
             telefono_proveedor: facturaForm.telefono_proveedor || null,
             fecha_compra: facturaForm.fecha_compra || null,
@@ -380,47 +383,158 @@ export default function ActivosPage() {
             total: totals.total,
             factura_url: facturaForm.factura_url || null,
             descripcion_general: descripcionGeneral || null,
-          },
-        ])
-        .select()
-        .single()
+          })
+          .eq("id", editingFacturaId)
 
-      if (facturaError) throw facturaError
+        if (updateError) throw updateError
 
-      const itemsPayload = facturaItems
-        .filter((item) => item.descripcion)
-        .map((item) => ({
-          factura_id: factura.id,
-          categoria: item.categoria || null,
-          cantidad: parseMoney(item.cantidad),
-          descripcion: item.descripcion || null,
-          subtotal: parseMoney(item.subtotal),
-          iva: parseMoney(item.iva),
-          total: getItemTotal(item.subtotal, item.iva, item.total),
-        }))
+        // Eliminar items antiguos
+        const { error: deleteItemsError } = await supabase
+          .from("facturas_activos_items")
+          .delete()
+          .eq("factura_id", editingFacturaId)
 
-      if (itemsPayload.length > 0) {
-        const { error: itemsError } = await supabase.from("facturas_activos_items").insert(itemsPayload)
-        if (itemsError) throw itemsError
+        if (deleteItemsError) throw deleteItemsError
+
+        // Insertar nuevos items
+        const itemsPayload = facturaItems
+          .filter((item) => item.descripcion)
+          .map((item) => ({
+            factura_id: editingFacturaId,
+            categoria: item.categoria || null,
+            cantidad: parseMoney(item.cantidad),
+            descripcion: item.descripcion || null,
+            subtotal: parseMoney(item.subtotal),
+            iva: parseMoney(item.iva),
+            total: getItemTotal(item.subtotal, item.iva, item.total),
+          }))
+
+        if (itemsPayload.length > 0) {
+          const { error: itemsError } = await supabase.from("facturas_activos_items").insert(itemsPayload)
+          if (itemsError) throw itemsError
+        }
+      } else {
+        // Modo creación: insertar nueva factura
+        const { data: factura, error: facturaError } = await supabase
+          .from("facturas_activos")
+          .insert([
+            {
+              proveedor: facturaForm.proveedor || null,
+              telefono_proveedor: facturaForm.telefono_proveedor || null,
+              fecha_compra: facturaForm.fecha_compra || null,
+              subtotal: totals.subtotal,
+              iva: totals.iva,
+              total: totals.total,
+              factura_url: facturaForm.factura_url || null,
+              descripcion_general: descripcionGeneral || null,
+            },
+          ])
+          .select()
+          .single()
+
+        if (facturaError) throw facturaError
+
+        const itemsPayload = facturaItems
+          .filter((item) => item.descripcion)
+          .map((item) => ({
+            factura_id: factura.id,
+            categoria: item.categoria || null,
+            cantidad: parseMoney(item.cantidad),
+            descripcion: item.descripcion || null,
+            subtotal: parseMoney(item.subtotal),
+            iva: parseMoney(item.iva),
+            total: getItemTotal(item.subtotal, item.iva, item.total),
+          }))
+
+        if (itemsPayload.length > 0) {
+          const { error: itemsError } = await supabase.from("facturas_activos_items").insert(itemsPayload)
+          if (itemsError) throw itemsError
+        }
       }
 
-      setShowNuevaFactura(false)
-      setFacturaForm({
-        proveedor: "",
-        telefono_proveedor: "",
-        fecha_compra: new Date().toISOString().split("T")[0],
-        subtotal: "",
-        iva: "",
-        total: "",
-        factura_url: "",
-      })
-      setFacturaItems([])
+      handleCancelarEdicionFactura()
       await fetchData()
     } catch (error: any) {
       alert(error.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleEditarFactura = async (factura: any) => {
+    // Cargar la factura en el formulario para editar
+    setFacturaForm({
+      proveedor: factura.proveedor || "",
+      telefono_proveedor: factura.telefono_proveedor || "",
+      fecha_compra: factura.fecha_compra || new Date().toISOString().split("T")[0],
+      subtotal: "",
+      iva: "",
+      total: "",
+      factura_url: factura.factura_url || "",
+    })
+
+    // Cargar los items
+    setFacturaItems(
+      facturaItemsDetalle.map((item) => ({
+        categoria: item.categoria || "",
+        cantidad: item.cantidad || "",
+        descripcion: item.descripcion || "",
+        subtotal: item.subtotal || "",
+        iva: item.iva || "",
+        total: item.total || "",
+      }))
+    )
+
+    setEditingFacturaId(factura.id)
+    setShowDetalleFactura(false)
+    setShowNuevaFactura(true)
+  }
+
+  const handleEliminarFactura = async (facturaId: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar esta factura? Se eliminaran todos sus articulos.")) {
+      return
+    }
+
+    setLoading(true)
+    try {
+      // Eliminar items primero (por restricción de FK)
+      const { error: itemsError } = await supabase
+        .from("facturas_activos_items")
+        .delete()
+        .eq("factura_id", facturaId)
+
+      if (itemsError) throw itemsError
+
+      // Eliminar factura
+      const { error: facturaError } = await supabase
+        .from("facturas_activos")
+        .delete()
+        .eq("id", facturaId)
+
+      if (facturaError) throw facturaError
+
+      setShowDetalleFactura(false)
+      await fetchData()
+    } catch (error: any) {
+      alert(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelarEdicionFactura = () => {
+    setEditingFacturaId(null)
+    setShowNuevaFactura(false)
+    setFacturaForm({
+      proveedor: "",
+      telefono_proveedor: "",
+      fecha_compra: new Date().toISOString().split("T")[0],
+      subtotal: "",
+      iva: "",
+      total: "",
+      factura_url: "",
+    })
+    setFacturaItems([])
   }
 
   const handleRegistrarMovimiento = async () => {
@@ -737,10 +851,14 @@ export default function ActivosPage() {
       </Dialog>
 
       {/* Modal nueva factura */}
-      <Dialog open={showNuevaFactura} onOpenChange={setShowNuevaFactura}>
+      <Dialog open={showNuevaFactura} onOpenChange={(open) => {
+        if (!open) handleCancelarEdicionFactura()
+      }}>
         <DialogContent className="max-w-5xl bg-white">
           <DialogHeader>
-            <DialogTitle className="text-lg font-black uppercase">Nueva factura</DialogTitle>
+            <DialogTitle className="text-lg font-black uppercase">
+              {editingFacturaId ? "Editar factura" : "Nueva factura"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="border rounded-lg p-3 space-y-2 bg-zinc-50">
@@ -882,14 +1000,21 @@ export default function ActivosPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pt-4 flex gap-2">
             <Button
-              className="w-full font-black"
+              variant="outline"
+              onClick={handleCancelarEdicionFactura}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 font-black"
               style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
               onClick={handleGuardarFactura}
               disabled={loading}
             >
-              GUARDAR FACTURA
+              {editingFacturaId ? "GUARDAR CAMBIOS" : "GUARDAR FACTURA"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -955,6 +1080,27 @@ export default function ActivosPage() {
             </div>
           )}
         </DialogContent>
+        <DialogFooter className="pt-4 flex gap-2">
+          {facturaSeleccionada && (
+            <>
+              <Button
+                variant="destructive"
+                onClick={() => handleEliminarFactura(facturaSeleccionada.id)}
+                disabled={loading}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+              </Button>
+              <Button
+                className="flex-1 font-black"
+                style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
+                onClick={() => handleEditarFactura(facturaSeleccionada)}
+                disabled={loading}
+              >
+                Editar factura
+              </Button>
+            </>
+          )}
+        </DialogFooter>
       </Dialog>
 
       {/* Modal detalle */}
