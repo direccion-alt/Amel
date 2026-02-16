@@ -159,6 +159,9 @@ export default function ActivosPage() {
       if (response.ok) {
         setFormActivo((prev) => ({
           ...prev,
+          nombre: prev.nombre || data.descripcion_producto || prev.nombre,
+          categoria: prev.categoria || data.categoria || prev.categoria,
+          cantidad_total: prev.cantidad_total || (data.cantidad ?? prev.cantidad_total),
           compra_subtotal: data.subtotal ?? prev.compra_subtotal,
           compra_iva: data.iva ?? prev.compra_iva,
           compra_total: data.total ?? prev.compra_total,
@@ -402,11 +405,19 @@ export default function ActivosPage() {
               value={formActivo.nombre}
               onChange={(e) => setFormActivo({ ...formActivo, nombre: e.target.value })}
             />
-            <Input
-              placeholder="Categoria (EPP, Herramienta, Accesorio)"
+            <select
+              className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
               value={formActivo.categoria}
               onChange={(e) => setFormActivo({ ...formActivo, categoria: e.target.value })}
-            />
+            >
+              <option value="">Categoria</option>
+              <option value="EPP">Equipo de Proteccion Personal</option>
+              <option value="SEGURIDAD">Equipo de Seguridad</option>
+              <option value="DIAGNOSTICO">Equipo de Diagnostico</option>
+              <option value="HERRAMIENTA">Herramienta</option>
+              <option value="AUXILIAR">Equipo Auxiliar</option>
+              <option value="OTRO">Otro</option>
+            </select>
             <Input
               placeholder="Unidad de medida (pz, caja, kit)"
               value={formActivo.unidad_medida}

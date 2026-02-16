@@ -66,12 +66,14 @@ INSTRUCCIONES:
     }
 
     let data: {
+      cantidad: number | null
       subtotal: number | null
       iva: number | null
       total: number | null
       proveedor: string | null
       fecha_compra: string | null
       descripcion_producto: string | null
+      categoria: string | null
     }
 
     try {
@@ -81,12 +83,14 @@ INSTRUCCIONES:
     }
 
     return NextResponse.json({
+      cantidad: data.cantidad ?? null,
       subtotal: data.subtotal ?? null,
       iva: data.iva ?? null,
       total: data.total ?? null,
       proveedor: data.proveedor ?? null,
       fecha_compra: data.fecha_compra ?? null,
       descripcion_producto: data.descripcion_producto ?? null,
+      categoria: data.categoria ?? null,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 })
