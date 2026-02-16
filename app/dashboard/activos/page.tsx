@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Box, FileUp, PlusCircle, ClipboardList, Trash2 } from "lucide-react"
+import { Box, FileUp, PlusCircle, ClipboardList, Trash2, FileText } from "lucide-react"
 
 const AMEL_YELLOW = "#FFDE18"
 const supabaseUrl = "https://hgkzcdmagdtjgxaniswr.supabase.co"
@@ -30,6 +30,15 @@ const getCompraTotal = (subtotal: any, iva: any, total: any) => {
   return parseMoney(total)
 }
 
+const getItemTotal = (subtotal: any, iva: any, total: any) => {
+  const subtotalValue = parseMoney(subtotal)
+  const ivaValue = parseMoney(iva)
+  if (subtotalValue !== null || ivaValue !== null) {
+    return (subtotalValue || 0) + (ivaValue || 0)
+  }
+  return parseMoney(total)
+}
+
 const movimientoOptions = [
   { value: "ENTRADA", label: "Entrada" },
   { value: "SALIDA", label: "Salida" },
@@ -43,11 +52,14 @@ export default function ActivosPage() {
   const [personal, setPersonal] = useState<any[]>([])
   const [unidades, setUnidades] = useState<any[]>([])
   const [movimientos, setMovimientos] = useState<any[]>([])
+  const [facturas, setFacturas] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [uploadingFactura, setUploadingFactura] = useState(false)
+  const [uploadingFacturaCompra, setUploadingFacturaCompra] = useState(false)
   const [filtro, setFiltro] = useState("")
 
   const [showNuevo, setShowNuevo] = useState(false)
+  const [showNuevaFactura, setShowNuevaFactura] = useState(false)
   const [showMovimiento, setShowMovimiento] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [activoSeleccionado, setActivoSeleccionado] = useState<any>(null)
@@ -57,9 +69,7 @@ export default function ActivosPage() {
   const [formActivo, setFormActivo] = useState({
     nombre: "",
     categoria: "",
-    unidad_medida: "",
     cantidad_total: "",
-    costo_unitario: "",
     ubicacion_actual: "",
     compra_subtotal: "",
     compra_iva: "",
@@ -69,6 +79,18 @@ export default function ActivosPage() {
     factura_url: "",
     compra_descripcion: "",
   })
+
+  const [facturaForm, setFacturaForm] = useState({
+    proveedor: "",
+    telefono_proveedor: "",
+    fecha_compra: new Date().toISOString().split("T")[0],
+    subtotal: "",
+    iva: "",
+    total: "",
+    factura_url: "",
+  })
+
+  const [facturaItems, setFacturaItems] = useState<any[]>([])
 
   const [formMovimiento, setFormMovimiento] = useState({
     tipo_movimiento: "ENTRADA",
@@ -85,9 +107,11 @@ export default function ActivosPage() {
     const { data: a } = await supabase.from("activos").select("*").order("nombre")
     const { data: p } = await supabase.from("operadores").select("id, nombre, apellido, estatus").order("nombre")
     const { data: u } = await supabase.from("unidades").select("id, economico, estatus").order("economico")
+    const { data: f } = await supabase.from("facturas_activos").select("*").order("fecha_compra", { ascending: false })
     if (a) setActivos(a)
     if (p) setPersonal(p)
     if (u) setUnidades(u)
+    if (f) setFacturas(f)
     setLoading(false)
   }
 
@@ -157,17 +181,18 @@ export default function ActivosPage() {
       const response = await fetch("/api/escanear-factura-activo", { method: "POST", body: formData })
       const data = await response.json()
       if (response.ok) {
+        const firstItem = Array.isArray(data.items) && data.items.length > 0 ? data.items[0] : null
         setFormActivo((prev) => ({
           ...prev,
-          nombre: prev.nombre || data.descripcion_producto || prev.nombre,
-          categoria: prev.categoria || data.categoria || prev.categoria,
-          cantidad_total: prev.cantidad_total || (data.cantidad ?? prev.cantidad_total),
+          nombre: prev.nombre || firstItem?.descripcion || prev.nombre,
+          categoria: prev.categoria || firstItem?.categoria || prev.categoria,
+          cantidad_total: firstItem?.cantidad ?? prev.cantidad_total,
           compra_subtotal: data.subtotal ?? prev.compra_subtotal,
           compra_iva: data.iva ?? prev.compra_iva,
           compra_total: data.total ?? prev.compra_total,
           proveedor_compra: data.proveedor ?? prev.proveedor_compra,
           fecha_compra: data.fecha_compra ?? prev.fecha_compra,
-          compra_descripcion: data.descripcion_producto ?? prev.compra_descripcion,
+          compra_descripcion: firstItem?.descripcion ?? prev.compra_descripcion,
         }))
       } else {
         alert(data?.error || "No se pudo leer la factura con IA")
@@ -180,20 +205,75 @@ export default function ActivosPage() {
     setUploadingFactura(false)
   }
 
+  const handleFacturaCompraUpload = async (e: any) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingFacturaCompra(true)
+    const name = `factura_activo_${Date.now()}_${file.name}`
+
+    const { error: uploadError } = await supabase.storage.from("facturas-activos").upload(name, file)
+    if (uploadError) {
+      setUploadingFacturaCompra(false)
+      return alert(uploadError.message)
+    }
+
+    const { data: urlData } = supabase.storage.from("facturas-activos").getPublicUrl(name)
+    const facturaUrl = urlData.publicUrl
+
+    setFacturaForm((prev) => ({ ...prev, factura_url: facturaUrl }))
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const response = await fetch("/api/escanear-factura-activo", { method: "POST", body: formData })
+      const data = await response.json()
+      if (response.ok) {
+        setFacturaForm((prev) => ({
+          ...prev,
+          proveedor: data.proveedor ?? prev.proveedor,
+          telefono_proveedor: data.telefono_proveedor ?? prev.telefono_proveedor,
+          fecha_compra: data.fecha_compra ?? prev.fecha_compra,
+          subtotal: data.subtotal ?? prev.subtotal,
+          iva: data.iva ?? prev.iva,
+          total: data.total ?? prev.total,
+        }))
+
+        setFacturaItems(
+          Array.isArray(data.items)
+            ? data.items.map((item: any) => ({
+                categoria: item.categoria || "",
+                cantidad: item.cantidad || "",
+                descripcion: item.descripcion || "",
+                subtotal: item.subtotal || "",
+                iva: item.iva || "",
+                total: item.total || "",
+              }))
+            : []
+        )
+      } else {
+        alert(data?.error || "No se pudo leer la factura con IA")
+      }
+    } catch (error) {
+      console.error("Error al escanear factura de activo:", error)
+      alert("No se pudo leer la factura con IA")
+    }
+
+    setUploadingFacturaCompra(false)
+  }
+
   const handleCrearActivo = async () => {
-    if (!formActivo.nombre || !formActivo.cantidad_total) {
-      return alert("Nombre y cantidad son obligatorios")
+    const nombreFinal = formActivo.nombre || formActivo.compra_descripcion
+    if (!nombreFinal || !formActivo.cantidad_total) {
+      return alert("Descripcion y cantidad son obligatorios")
     }
     setLoading(true)
     const total = Number(formActivo.cantidad_total) || 0
     const { error } = await supabase.from("activos").insert([
       {
-        nombre: formActivo.nombre,
+        nombre: nombreFinal,
         categoria: formActivo.categoria || null,
-        unidad_medida: formActivo.unidad_medida || null,
         cantidad_total: total,
         cantidad_disponible: total,
-        costo_unitario: formActivo.costo_unitario ? Number(formActivo.costo_unitario) : null,
         ubicacion_actual: formActivo.ubicacion_actual || null,
         compra_subtotal: parseMoney(formActivo.compra_subtotal),
         compra_iva: parseMoney(formActivo.compra_iva),
@@ -211,9 +291,7 @@ export default function ActivosPage() {
       setFormActivo({
         nombre: "",
         categoria: "",
-        unidad_medida: "",
         cantidad_total: "",
-        costo_unitario: "",
         ubicacion_actual: "",
         compra_subtotal: "",
         compra_iva: "",
@@ -226,6 +304,84 @@ export default function ActivosPage() {
       fetchData()
     }
     setLoading(false)
+  }
+
+  const getFacturaTotals = () => {
+    return facturaItems.reduce(
+      (acc, item) => {
+        const subtotal = parseMoney(item.subtotal) || 0
+        const iva = parseMoney(item.iva) || 0
+        const total = getItemTotal(item.subtotal, item.iva, item.total) || 0
+        return {
+          subtotal: acc.subtotal + subtotal,
+          iva: acc.iva + iva,
+          total: acc.total + total,
+        }
+      },
+      { subtotal: 0, iva: 0, total: 0 }
+    )
+  }
+
+  const handleGuardarFactura = async () => {
+    if (!facturaItems.some((item) => item.descripcion)) {
+      return alert("Agrega al menos un articulo")
+    }
+
+    setLoading(true)
+    try {
+      const totals = getFacturaTotals()
+      const { data: factura, error: facturaError } = await supabase
+        .from("facturas_activos")
+        .insert([
+          {
+            proveedor: facturaForm.proveedor || null,
+            telefono_proveedor: facturaForm.telefono_proveedor || null,
+            fecha_compra: facturaForm.fecha_compra || null,
+            subtotal: totals.subtotal,
+            iva: totals.iva,
+            total: totals.total,
+            factura_url: facturaForm.factura_url || null,
+          },
+        ])
+        .select()
+        .single()
+
+      if (facturaError) throw facturaError
+
+      const itemsPayload = facturaItems
+        .filter((item) => item.descripcion)
+        .map((item) => ({
+          factura_id: factura.id,
+          categoria: item.categoria || null,
+          cantidad: parseMoney(item.cantidad),
+          descripcion: item.descripcion || null,
+          subtotal: parseMoney(item.subtotal),
+          iva: parseMoney(item.iva),
+          total: getItemTotal(item.subtotal, item.iva, item.total),
+        }))
+
+      if (itemsPayload.length > 0) {
+        const { error: itemsError } = await supabase.from("facturas_activos_items").insert(itemsPayload)
+        if (itemsError) throw itemsError
+      }
+
+      setShowNuevaFactura(false)
+      setFacturaForm({
+        proveedor: "",
+        telefono_proveedor: "",
+        fecha_compra: new Date().toISOString().split("T")[0],
+        subtotal: "",
+        iva: "",
+        total: "",
+        factura_url: "",
+      })
+      setFacturaItems([])
+      await fetchData()
+    } catch (error: any) {
+      alert(error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleRegistrarMovimiento = async () => {
@@ -304,13 +460,22 @@ export default function ActivosPage() {
             <Box className="h-8 w-8 text-yellow-600" />
             <h1 className="text-2xl font-black italic uppercase tracking-tighter">Equipo y Activo</h1>
           </div>
-          <Button
-            onClick={() => setShowNuevo(true)}
-            style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
-            className="font-black italic px-6 h-10 shadow-md"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> NUEVO ACTIVO
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setShowNuevaFactura(true)}
+              style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
+              className="font-black italic px-6 h-10 shadow-md"
+            >
+              <FileText className="mr-2 h-4 w-4" /> NUEVA FACTURA
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowNuevo(true)}
+              className="font-black italic px-6 h-10 shadow-md"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> NUEVO ACTIVO
+            </Button>
+          </div>
         </div>
 
         <Card className="bg-white">
@@ -327,6 +492,39 @@ export default function ActivosPage() {
               <div className="text-xs text-zinc-500">{activosFiltrados.length} activos</div>
             </div>
           </CardContent>
+        </Card>
+
+        <Card className="bg-white shadow-xl rounded-2xl overflow-hidden">
+          <CardHeader className="bg-zinc-900 text-white p-4">
+            <CardTitle className="text-sm font-black uppercase italic flex items-center gap-2">
+              <FileText size={18} /> Facturas de compra
+            </CardTitle>
+          </CardHeader>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-zinc-50">
+                <TableRow className="text-xs font-black uppercase">
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Telefono</TableHead>
+                  <TableHead className="text-center">Fecha</TableHead>
+                  <TableHead className="text-center">Total (con IVA)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {facturas.map((f) => (
+                  <TableRow key={f.id} className="hover:bg-zinc-50 text-sm">
+                    <TableCell className="font-bold">{f.proveedor || "-"}</TableCell>
+                    <TableCell>{f.telefono_proveedor || "-"}</TableCell>
+                    <TableCell className="text-center">{f.fecha_compra || "-"}</TableCell>
+                    <TableCell className="text-center font-black text-green-600">
+                      {f.total ? `$${Number(f.total).toLocaleString("es-MX")}` : "-"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
 
         <Card className="bg-white shadow-xl rounded-2xl overflow-hidden">
@@ -400,11 +598,6 @@ export default function ActivosPage() {
             <DialogTitle className="text-lg font-black uppercase">Nuevo activo</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Input
-              placeholder="Articulo / Equipo"
-              value={formActivo.nombre}
-              onChange={(e) => setFormActivo({ ...formActivo, nombre: e.target.value })}
-            />
             <select
               className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
               value={formActivo.categoria}
@@ -419,21 +612,10 @@ export default function ActivosPage() {
               <option value="OTRO">Otro</option>
             </select>
             <Input
-              placeholder="Unidad de medida (pz, caja, kit)"
-              value={formActivo.unidad_medida}
-              onChange={(e) => setFormActivo({ ...formActivo, unidad_medida: e.target.value })}
-            />
-            <Input
               type="number"
               placeholder="Cantidad total"
               value={formActivo.cantidad_total}
               onChange={(e) => setFormActivo({ ...formActivo, cantidad_total: e.target.value })}
-            />
-            <Input
-              type="number"
-              placeholder="Costo unitario (opcional)"
-              value={formActivo.costo_unitario}
-              onChange={(e) => setFormActivo({ ...formActivo, costo_unitario: e.target.value })}
             />
             <Input
               placeholder="Ubicacion inicial"
@@ -496,6 +678,158 @@ export default function ActivosPage() {
               disabled={loading}
             >
               GUARDAR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal nueva factura */}
+      <Dialog open={showNuevaFactura} onOpenChange={setShowNuevaFactura}>
+        <DialogContent className="max-w-4xl bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black uppercase">Nueva factura</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border rounded-lg p-3 space-y-2 bg-zinc-50">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase text-zinc-600">Factura de compra</p>
+                <label className="text-xs text-blue-600 cursor-pointer">
+                  <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFacturaCompraUpload} />
+                  {uploadingFacturaCompra ? "Escaneando..." : "Subir + IA"}
+                </label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Input
+                  placeholder="Proveedor"
+                  value={facturaForm.proveedor}
+                  onChange={(e) => setFacturaForm({ ...facturaForm, proveedor: e.target.value })}
+                />
+                <Input
+                  placeholder="Telefono proveedor"
+                  value={facturaForm.telefono_proveedor}
+                  onChange={(e) => setFacturaForm({ ...facturaForm, telefono_proveedor: e.target.value })}
+                />
+                <Input
+                  type="date"
+                  value={facturaForm.fecha_compra}
+                  onChange={(e) => setFacturaForm({ ...facturaForm, fecha_compra: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black uppercase">Articulos</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setFacturaItems((prev) => [
+                      ...prev,
+                      { categoria: "", cantidad: "", descripcion: "", subtotal: "", iva: "", total: "" },
+                    ])
+                  }
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" /> Agregar articulo
+                </Button>
+              </div>
+
+              {facturaItems.length === 0 ? (
+                <div className="text-xs text-zinc-500">Sin articulos</div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {facturaItems.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center border rounded-lg p-2">
+                      <div className="md:col-span-2">
+                        <select
+                          className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
+                          value={item.categoria}
+                          onChange={(e) => {
+                            const next = [...facturaItems]
+                            next[idx] = { ...next[idx], categoria: e.target.value }
+                            setFacturaItems(next)
+                          }}
+                        >
+                          <option value="">Categoria</option>
+                          <option value="EPP">EPP</option>
+                          <option value="SEGURIDAD">SEGURIDAD</option>
+                          <option value="DIAGNOSTICO">DIAGNOSTICO</option>
+                          <option value="HERRAMIENTA">HERRAMIENTA</option>
+                          <option value="AUXILIAR">AUXILIAR</option>
+                          <option value="OTRO">OTRO</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <Input
+                          type="number"
+                          placeholder="Cantidad"
+                          value={item.cantidad}
+                          onChange={(e) => {
+                            const next = [...facturaItems]
+                            next[idx] = { ...next[idx], cantidad: e.target.value }
+                            setFacturaItems(next)
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-4">
+                        <Input
+                          placeholder="Descripcion"
+                          value={item.descripcion}
+                          onChange={(e) => {
+                            const next = [...facturaItems]
+                            next[idx] = { ...next[idx], descripcion: e.target.value }
+                            setFacturaItems(next)
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Input
+                          type="number"
+                          placeholder="Subtotal"
+                          value={item.subtotal}
+                          onChange={(e) => {
+                            const next = [...facturaItems]
+                            next[idx] = { ...next[idx], subtotal: e.target.value }
+                            setFacturaItems(next)
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-1">
+                        <Input
+                          type="number"
+                          placeholder="IVA"
+                          value={item.iva}
+                          onChange={(e) => {
+                            const next = [...facturaItems]
+                            next[idx] = { ...next[idx], iva: e.target.value }
+                            setFacturaItems(next)
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-1 text-right text-xs font-bold">
+                        ${Number(getItemTotal(item.subtotal, item.iva, item.total) || 0).toLocaleString("es-MX")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
+              <div className="text-xs font-bold uppercase">Total con IVA</div>
+              <div className="text-2xl font-black">
+                ${Number(getFacturaTotals().total).toLocaleString("es-MX")}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button
+              className="w-full font-black"
+              style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
+              onClick={handleGuardarFactura}
+              disabled={loading}
+            >
+              GUARDAR FACTURA
             </Button>
           </DialogFooter>
         </DialogContent>

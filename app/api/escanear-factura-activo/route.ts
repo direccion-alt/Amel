@@ -27,19 +27,37 @@ Eres un asistente experto en leer facturas de compra de articulos y equipos en M
 
 Extrae SOLO estos campos y responde en JSON valido:
 {
+  "proveedor": "Nombre del proveedor",
+  "telefono_proveedor": "Telefono del proveedor",
+  "fecha_compra": "YYYY-MM-DD",
   "subtotal": numero,
   "iva": numero,
   "total": numero,
-  "proveedor": "Nombre del proveedor",
-  "fecha_compra": "YYYY-MM-DD",
-  "descripcion_producto": "Descripcion corta del articulo o equipo"
+  "items": [
+    {
+      "categoria": "EPP | SEGURIDAD | DIAGNOSTICO | HERRAMIENTA | AUXILIAR | OTRO",
+      "cantidad": numero,
+      "descripcion": "Descripcion del articulo",
+      "subtotal": numero,
+      "iva": numero,
+      "total": numero
+    }
+  ]
 }
 
 INSTRUCCIONES:
 - Los montos deben ser solo numeros (ejemplo: 4500.50)
+- La cantidad debe ser un numero (ejemplo: 5). Si no se ve, usa null
 - Si no aparece algun campo, usa null
 - La fecha debe estar en formato YYYY-MM-DD
 - Responde UNICAMENTE con el JSON, sin texto extra
+
+Clasifica categoria segun palabras clave:
+- "casco", "chaleco", "guantes", "lentes", "botas" -> EPP
+- "extintor", "conos", "triangulo", "botiquin" -> SEGURIDAD
+- "scanner", "diagnostico", "multimetro" -> DIAGNOSTICO
+- "llave", "matraca", "destornillador", "herramienta" -> HERRAMIENTA
+- "lampara", "banda", "cinta", "cable" -> AUXILIAR
 `
 
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" })
@@ -66,14 +84,20 @@ INSTRUCCIONES:
     }
 
     let data: {
-      cantidad: number | null
+      proveedor: string | null
+      telefono_proveedor: string | null
+      fecha_compra: string | null
       subtotal: number | null
       iva: number | null
       total: number | null
-      proveedor: string | null
-      fecha_compra: string | null
-      descripcion_producto: string | null
-      categoria: string | null
+      items: Array<{
+        categoria: string | null
+        cantidad: number | null
+        descripcion: string | null
+        subtotal: number | null
+        iva: number | null
+        total: number | null
+      }> | null
     }
 
     try {
@@ -83,14 +107,13 @@ INSTRUCCIONES:
     }
 
     return NextResponse.json({
-      cantidad: data.cantidad ?? null,
+      proveedor: data.proveedor ?? null,
+      telefono_proveedor: data.telefono_proveedor ?? null,
+      fecha_compra: data.fecha_compra ?? null,
       subtotal: data.subtotal ?? null,
       iva: data.iva ?? null,
       total: data.total ?? null,
-      proveedor: data.proveedor ?? null,
-      fecha_compra: data.fecha_compra ?? null,
-      descripcion_producto: data.descripcion_producto ?? null,
-      categoria: data.categoria ?? null,
+      items: Array.isArray(data.items) ? data.items : [],
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 })
