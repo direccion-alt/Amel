@@ -662,7 +662,7 @@ export default function ActivosPage() {
                   <TableHead>Telefono</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
                   <TableHead className="text-center">Total (con IVA)</TableHead>
-                  <TableHead className="text-center">Factura</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -674,10 +674,11 @@ export default function ActivosPage() {
                     <TableCell className="text-center font-black text-green-600">
                       {f.total ? `$${Number(f.total).toLocaleString("es-MX")}` : "-"}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center flex items-center justify-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
+                        title="Ver detalle"
                         onClick={async () => {
                           setFacturaSeleccionada(f)
                           await fetchFacturaItems(f.id)
@@ -685,6 +686,26 @@ export default function ActivosPage() {
                         }}
                       >
                         <Eye className="h-4 w-4 text-blue-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Editar"
+                        onClick={async () => {
+                          setFacturaSeleccionada(f)
+                          await fetchFacturaItems(f.id)
+                          handleEditarFactura(f)
+                        }}
+                      >
+                        <FileUp className="h-4 w-4 text-amber-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Eliminar"
+                        onClick={() => handleEliminarFactura(f.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -854,7 +875,7 @@ export default function ActivosPage() {
       <Dialog open={showNuevaFactura} onOpenChange={(open) => {
         if (!open) handleCancelarEdicionFactura()
       }}>
-        <DialogContent className="max-w-5xl bg-white">
+        <DialogContent className="max-w-6xl bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">
               {editingFacturaId ? "Editar factura" : "Nueva factura"}
@@ -1022,7 +1043,7 @@ export default function ActivosPage() {
 
       {/* Modal detalle factura */}
       <Dialog open={showDetalleFactura} onOpenChange={setShowDetalleFactura}>
-        <DialogContent className="max-w-4xl bg-white">
+        <DialogContent className="max-w-5xl bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-black uppercase">Detalle de factura</DialogTitle>
           </DialogHeader>
