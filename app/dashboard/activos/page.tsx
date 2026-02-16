@@ -448,6 +448,9 @@ export default function ActivosPage() {
                   {uploadingFactura ? "Escaneando..." : "Subir + IA"}
                 </label>
               </div>
+              <p className="text-[10px] text-zinc-500">
+                La IA completa cantidad, proveedor, fecha, descripcion y sugerencia de categoria.
+              </p>
               <Input
                 placeholder="Proveedor"
                 value={formActivo.proveedor_compra}
