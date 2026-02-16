@@ -39,6 +39,15 @@ const getItemTotal = (subtotal: any, iva: any, total: any) => {
   return parseMoney(total)
 }
 
+const getDescripcionGeneral = (items: any[]) => {
+  const unique = new Set(
+    items
+      .map((item) => String(item.descripcion || "").trim())
+      .filter((value) => value.length > 0)
+  )
+  return Array.from(unique).join(", ")
+}
+
 const movimientoOptions = [
   { value: "ENTRADA", label: "Entrada" },
   { value: "SALIDA", label: "Salida" },
@@ -358,6 +367,7 @@ export default function ActivosPage() {
     setLoading(true)
     try {
       const totals = getFacturaTotals()
+      const descripcionGeneral = getDescripcionGeneral(facturaItems)
       const { data: factura, error: facturaError } = await supabase
         .from("facturas_activos")
         .insert([
@@ -369,6 +379,7 @@ export default function ActivosPage() {
             iva: totals.iva,
             total: totals.total,
             factura_url: facturaForm.factura_url || null,
+            descripcion_general: descripcionGeneral || null,
           },
         ])
         .select()
@@ -857,6 +868,13 @@ export default function ActivosPage() {
               )}
             </div>
 
+            <div className="bg-zinc-50 border rounded-lg p-3 text-xs">
+              <div className="font-bold uppercase text-zinc-600 mb-1">Descripcion general</div>
+              <div className="text-zinc-700">
+                {getDescripcionGeneral(facturaItems) || "Sin descripcion"}
+              </div>
+            </div>
+
             <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
               <div className="text-xs font-bold uppercase">Total con IVA</div>
               <div className="text-2xl font-black">
@@ -899,6 +917,13 @@ export default function ActivosPage() {
                     </a>
                   </div>
                 )}
+              </div>
+
+              <div className="bg-zinc-50 border rounded-lg p-3 text-xs">
+                <div className="font-bold uppercase text-zinc-600 mb-1">Descripcion general</div>
+                <div className="text-zinc-700">
+                  {facturaSeleccionada.descripcion_general || getDescripcionGeneral(facturaItemsDetalle) || "-"}
+                </div>
               </div>
 
               <div className="space-y-2">
