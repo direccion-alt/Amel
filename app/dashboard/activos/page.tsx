@@ -76,6 +76,8 @@ export default function ActivosPage() {
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<any>(null)
   const [facturaItemsDetalle, setFacturaItemsDetalle] = useState<any[]>([])
   const [editingFacturaId, setEditingFacturaId] = useState<string | null>(null)
+  const [facturasItemsMap, setFacturasItemsMap] = useState<{ [key: string]: any[] }>({})
+  const [inventarioUbicacion, setInventarioUbicacion] = useState<any[]>([])
 
   const [archivoResponsiva, setArchivoResponsiva] = useState<File | null>(null)
 
@@ -96,6 +98,8 @@ export default function ActivosPage() {
   const [facturaForm, setFacturaForm] = useState({
     proveedor: "",
     telefono_proveedor: "",
+    solicitante_compra: "",
+    ubicacion: "",
     fecha_compra: new Date().toISOString().split("T")[0],
     subtotal: "",
     iva: "",
@@ -121,10 +125,30 @@ export default function ActivosPage() {
     const { data: p } = await supabase.from("operadores").select("id, nombre, apellido, estatus").order("nombre")
     const { data: u } = await supabase.from("unidades").select("id, economico, estatus").order("economico")
     const { data: f } = await supabase.from("facturas_activos").select("*").order("fecha_compra", { ascending: false })
+    const { data: inv } = await supabase
+      .from("inventario_activos_ubicacion")
+      .select("*")
+      .order("ubicacion", { ascending: true })
+    
     if (a) setActivos(a)
     if (p) setPersonal(p)
     if (u) setUnidades(u)
-    if (f) setFacturas(f)
+    if (f) {
+      setFacturas(f)
+      // Cargar los items de todas las facturas
+      const itemsMap: { [key: string]: any[] } = {}
+      for (const factura of f) {
+        const { data: items } = await supabase
+          .from("facturas_activos_items")
+          .select("*")
+          .eq("factura_id", factura.id)
+        if (items) {
+          itemsMap[factura.id] = items
+        }
+      }
+      setFacturasItemsMap(itemsMap)
+    }
+    if (inv) setInventarioUbicacion(inv)
     setLoading(false)
   }
 
@@ -165,6 +189,14 @@ export default function ActivosPage() {
     })
     return map
   }, [unidades])
+
+  const activosById = useMemo(() => {
+    const map = new Map<string, any>()
+    activos.forEach((a) => {
+      map.set(a.id, a)
+    })
+    return map
+  }, [activos])
 
   const activosFiltrados = useMemo(() => {
     const s = filtro.toLowerCase()
@@ -290,7 +322,7 @@ export default function ActivosPage() {
     }
     setLoading(true)
     const total = Number(formActivo.cantidad_total) || 0
-    const { error } = await supabase.from("activos").insert([
+    const { data: nuevoActivo, error } = await supabase.from("activos").insert([
       {
         nombre: nombreFinal,
         categoria: formActivo.categoria || null,
@@ -305,10 +337,34 @@ export default function ActivosPage() {
         factura_url: formActivo.factura_url || null,
         compra_descripcion: formActivo.compra_descripcion || null,
       },
-    ])
+    ]).select().single()
     if (error) {
       alert(error.message)
     } else {
+      if (nuevoActivo?.id && formActivo.ubicacion_actual && total > 0) {
+        const { data: ubicacionRow } = await supabase
+          .from("inventario_activos_ubicacion")
+          .select("id, cantidad")
+          .eq("activo_id", nuevoActivo.id)
+          .eq("ubicacion", formActivo.ubicacion_actual)
+          .maybeSingle()
+
+        const nuevaCantidad = (Number(ubicacionRow?.cantidad) || 0) + total
+        if (ubicacionRow?.id) {
+          await supabase
+            .from("inventario_activos_ubicacion")
+            .update({ cantidad: nuevaCantidad })
+            .eq("id", ubicacionRow.id)
+        } else {
+          await supabase.from("inventario_activos_ubicacion").insert([
+            {
+              activo_id: nuevoActivo.id,
+              ubicacion: formActivo.ubicacion_actual,
+              cantidad: nuevaCantidad,
+            },
+          ])
+        }
+      }
       setShowNuevo(false)
       setFormActivo({
         nombre: "",
@@ -377,6 +433,8 @@ export default function ActivosPage() {
           .update({
             proveedor: facturaForm.proveedor || null,
             telefono_proveedor: facturaForm.telefono_proveedor || null,
+            solicitante_compra: facturaForm.solicitante_compra || null,
+            ubicacion: facturaForm.ubicacion || null,
             fecha_compra: facturaForm.fecha_compra || null,
             subtotal: totals.subtotal,
             iva: totals.iva,
@@ -421,6 +479,8 @@ export default function ActivosPage() {
             {
               proveedor: facturaForm.proveedor || null,
               telefono_proveedor: facturaForm.telefono_proveedor || null,
+              solicitante_compra: facturaForm.solicitante_compra || null,
+              ubicacion: facturaForm.ubicacion || null,
               fecha_compra: facturaForm.fecha_compra || null,
               subtotal: totals.subtotal,
               iva: totals.iva,
@@ -466,6 +526,8 @@ export default function ActivosPage() {
     setFacturaForm({
       proveedor: factura.proveedor || "",
       telefono_proveedor: factura.telefono_proveedor || "",
+      solicitante_compra: factura.solicitante_compra || "",
+      ubicacion: factura.ubicacion || "",
       fecha_compra: factura.fecha_compra || new Date().toISOString().split("T")[0],
       subtotal: "",
       iva: "",
@@ -528,6 +590,8 @@ export default function ActivosPage() {
     setFacturaForm({
       proveedor: "",
       telefono_proveedor: "",
+      solicitante_compra: "",
+      ubicacion: "",
       fecha_compra: new Date().toISOString().split("T")[0],
       subtotal: "",
       iva: "",
@@ -574,6 +638,35 @@ export default function ActivosPage() {
       ])
       if (movError) throw movError
 
+      if (formMovimiento.ubicacion && delta !== 0) {
+        const { data: ubicacionRow } = await supabase
+          .from("inventario_activos_ubicacion")
+          .select("id, cantidad")
+          .eq("activo_id", activoSeleccionado.id)
+          .eq("ubicacion", formMovimiento.ubicacion)
+          .maybeSingle()
+
+        const nuevaCantidad = (Number(ubicacionRow?.cantidad) || 0) + delta
+        if (ubicacionRow?.id) {
+          const { error: ubicacionError } = await supabase
+            .from("inventario_activos_ubicacion")
+            .update({ cantidad: nuevaCantidad })
+            .eq("id", ubicacionRow.id)
+          if (ubicacionError) throw ubicacionError
+        } else {
+          const { error: ubicacionError } = await supabase
+            .from("inventario_activos_ubicacion")
+            .insert([
+              {
+                activo_id: activoSeleccionado.id,
+                ubicacion: formMovimiento.ubicacion,
+                cantidad: nuevaCantidad,
+              },
+            ])
+          if (ubicacionError) throw ubicacionError
+        }
+      }
+
       const { error: actError } = await supabase
         .from("activos")
         .update({
@@ -615,18 +708,11 @@ export default function ActivosPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
+              variant="outline"
               onClick={() => setShowNuevaFactura(true)}
-              style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
-              className="font-black italic px-6 h-10 shadow-md"
+              className="font-black italic px-6 h-10 shadow-md bg-white hover:bg-yellow-300 text-zinc-900"
             >
               <FileText className="mr-2 h-4 w-4" /> NUEVA FACTURA
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowNuevo(true)}
-              className="font-black italic px-6 h-10 shadow-md"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> NUEVO ACTIVO
             </Button>
           </div>
         </div>
@@ -659,57 +745,75 @@ export default function ActivosPage() {
               <TableHeader className="bg-zinc-50">
                 <TableRow className="text-xs font-black uppercase">
                   <TableHead>Proveedor</TableHead>
-                  <TableHead>Telefono</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
+                  <TableHead>Descripción General</TableHead>
+                  <TableHead>Categorías</TableHead>
                   <TableHead className="text-center">Total (con IVA)</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {facturas.map((f) => (
-                  <TableRow key={f.id} className="hover:bg-zinc-50 text-sm">
-                    <TableCell className="font-bold">{f.proveedor || "-"}</TableCell>
-                    <TableCell>{f.telefono_proveedor || "-"}</TableCell>
-                    <TableCell className="text-center">{f.fecha_compra || "-"}</TableCell>
-                    <TableCell className="text-center font-black text-green-600">
-                      {f.total ? `$${Number(f.total).toLocaleString("es-MX")}` : "-"}
-                    </TableCell>
-                    <TableCell className="text-center flex items-center justify-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title="Ver detalle"
-                        onClick={async () => {
-                          setFacturaSeleccionada(f)
-                          await fetchFacturaItems(f.id)
-                          setShowDetalleFactura(true)
-                        }}
-                      >
-                        <Eye className="h-4 w-4 text-blue-600" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title="Editar"
-                        onClick={async () => {
-                          setFacturaSeleccionada(f)
-                          await fetchFacturaItems(f.id)
-                          handleEditarFactura(f)
-                        }}
-                      >
-                        <FileUp className="h-4 w-4 text-amber-600" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title="Eliminar"
-                        onClick={() => handleEliminarFactura(f.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {facturas.map((f) => {
+                  const items = facturasItemsMap[f.id] || []
+                  const categorias = [...new Set(items.map((item) => item.categoria).filter(Boolean))]
+                  return (
+                    <TableRow key={f.id} className="hover:bg-zinc-50 text-sm">
+                      <TableCell className="font-bold">{f.proveedor || "-"}</TableCell>
+                      <TableCell className="text-center text-xs">{f.fecha_compra || "-"}</TableCell>
+                      <TableCell className="text-xs max-w-xs truncate" title={f.descripcion_general || "-"}>
+                        {f.descripcion_general || "-"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {categorias.length > 0
+                            ? categorias.map((cat) => (
+                                <Badge key={cat} variant="outline" className="text-xs bg-zinc-100">
+                                  {cat}
+                                </Badge>
+                              ))
+                            : "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-black text-green-600">
+                        {f.total ? `$${Number(f.total).toLocaleString("es-MX")}` : "-"}
+                      </TableCell>
+                      <TableCell className="text-center flex items-center justify-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Ver detalle"
+                          onClick={async () => {
+                            setFacturaSeleccionada(f)
+                            await fetchFacturaItems(f.id)
+                            setShowDetalleFactura(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Editar"
+                          onClick={async () => {
+                            setFacturaSeleccionada(f)
+                            await fetchFacturaItems(f.id)
+                            handleEditarFactura(f)
+                          }}
+                        >
+                          <FileUp className="h-4 w-4 text-amber-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Eliminar"
+                          onClick={() => handleEliminarFactura(f.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -718,7 +822,7 @@ export default function ActivosPage() {
         <Card className="bg-white shadow-xl rounded-2xl overflow-hidden">
           <CardHeader className="bg-zinc-900 text-white p-4">
             <CardTitle className="text-sm font-black uppercase italic flex items-center gap-2">
-              <ClipboardList size={18} /> Inventario de activos
+              <ClipboardList size={18} /> Activos
             </CardTitle>
           </CardHeader>
 
@@ -729,54 +833,98 @@ export default function ActivosPage() {
                   <TableHead>Articulo</TableHead>
                   <TableHead>Categoria</TableHead>
                   <TableHead className="text-center">Stock</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead className="text-center">Compra</TableHead>
-                  <TableHead>Responsable</TableHead>
-                  <TableHead>Unidad</TableHead>
-                  <TableHead>Ubicacion</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
+                  <TableHead>Ubicacion actual</TableHead>
+                  <TableHead className="text-center">Movimiento</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activosFiltrados.map((a) => (
-                  <TableRow key={a.id} className="hover:bg-zinc-50 text-sm">
-                    <TableCell className="font-bold">{a.nombre}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {a.categoria || "Sin categoria"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center font-black">
-                      {Number(a.cantidad_disponible || 0).toLocaleString()} / {Number(a.cantidad_total || 0).toLocaleString()}
-                    </TableCell>
-                    <TableCell>{a.proveedor_compra || "-"}</TableCell>
-                    <TableCell className="text-center text-xs font-semibold">
-                      {getCompraTotal(a.compra_subtotal, a.compra_iva, a.compra_total)
-                        ? `$${Number(getCompraTotal(a.compra_subtotal, a.compra_iva, a.compra_total)).toLocaleString("es-MX")}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{personalById.get(a.responsable_id) || "-"}</TableCell>
-                    <TableCell>{unidadesById.get(a.unidad_id) || "-"}</TableCell>
-                    <TableCell>{a.ubicacion_actual || "-"}</TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          setActivoSeleccionado(a)
-                          await fetchMovimientos(a.id)
-                          setShowDetalle(true)
-                        }}
-                      >
-                        Ver detalle
-                      </Button>
+                {activosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-xs text-zinc-500">
+                      Sin activos
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  activosFiltrados.map((a) => (
+                    <TableRow key={a.id} className="hover:bg-zinc-50 text-sm">
+                      <TableCell className="font-bold">{a.nombre}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {a.categoria || "Sin categoria"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center font-black">
+                        {Number(a.cantidad_disponible || 0).toLocaleString()} / {Number(a.cantidad_total || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell>{a.ubicacion_actual || "-"}</TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setActivoSeleccionado(a)
+                            setShowMovimiento(true)
+                          }}
+                        >
+                          Registrar movimiento
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </Card>
+
+        <Card className="bg-white shadow-xl rounded-2xl overflow-hidden">
+          <CardHeader className="bg-zinc-900 text-white p-4">
+            <CardTitle className="text-sm font-black uppercase italic flex items-center gap-2">
+              <ClipboardList size={18} /> Inventario por ubicacion
+            </CardTitle>
+          </CardHeader>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-zinc-50">
+                <TableRow className="text-xs font-black uppercase">
+                  <TableHead>Articulo</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Ubicacion</TableHead>
+                  <TableHead className="text-center">Cantidad</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inventarioUbicacion.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-xs text-zinc-500">
+                      Sin inventario por ubicacion
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inventarioUbicacion.map((row) => {
+                    const activo = activosById.get(row.activo_id)
+                    return (
+                      <TableRow key={row.id} className="hover:bg-zinc-50 text-sm">
+                        <TableCell className="font-bold">{activo?.nombre || "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {activo?.categoria || "Sin categoria"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{row.ubicacion || "-"}</TableCell>
+                        <TableCell className="text-center font-black">
+                          {Number(row.cantidad || 0).toLocaleString("es-MX")}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
       </div>
 
       {/* Modal nuevo activo */}
@@ -906,6 +1054,30 @@ export default function ActivosPage() {
                   value={facturaForm.fecha_compra}
                   onChange={(e) => setFacturaForm({ ...facturaForm, fecha_compra: e.target.value })}
                 />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <select
+                  className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
+                  value={facturaForm.solicitante_compra}
+                  onChange={(e) => setFacturaForm({ ...facturaForm, solicitante_compra: e.target.value })}
+                >
+                  <option value="">Solicitante compra</option>
+                  {personal.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {`${p.nombre || ""} ${p.apellido || ""}`.trim()}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="w-full h-10 text-xs font-bold p-2 rounded border bg-white"
+                  value={facturaForm.ubicacion}
+                  onChange={(e) => setFacturaForm({ ...facturaForm, ubicacion: e.target.value })}
+                >
+                  <option value="">Ubicacion destino</option>
+                  <option value="PATIO COATZACOALCOS">PATIO COATZACOALCOS</option>
+                  <option value="OFICINA COATZACOALCOS">OFICINA COATZACOALCOS</option>
+                  <option value="PATIO PUEBLA">PATIO PUEBLA</option>
+                </select>
               </div>
             </div>
 
@@ -1070,6 +1242,8 @@ export default function ActivosPage() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="font-bold">Proveedor:</span> {facturaSeleccionada.proveedor || "-"}</div>
                 <div><span className="font-bold">Telefono:</span> {facturaSeleccionada.telefono_proveedor || "-"}</div>
+                <div><span className="font-bold">Solicitante compra:</span> {personalById.get(facturaSeleccionada.solicitante_compra) || "-"}</div>
+                <div><span className="font-bold">Ubicacion:</span> {facturaSeleccionada.ubicacion || "-"}</div>
                 <div><span className="font-bold">Fecha:</span> {facturaSeleccionada.fecha_compra || "-"}</div>
                 <div><span className="font-bold">Subtotal:</span> ${Number(getFacturaDetalleTotals().subtotal || 0).toLocaleString("es-MX")}</div>
                 <div><span className="font-bold">IVA:</span> ${Number(getFacturaDetalleTotals().iva || 0).toLocaleString("es-MX")}</div>
@@ -1118,28 +1292,28 @@ export default function ActivosPage() {
               </div>
             </div>
           )}
+          <DialogFooter className="pt-4 flex gap-2 border-t mt-4">
+            {facturaSeleccionada && (
+              <>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleEliminarFactura(facturaSeleccionada.id)}
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                </Button>
+                <Button
+                  className="flex-1 font-black"
+                  style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
+                  onClick={() => handleEditarFactura(facturaSeleccionada)}
+                  disabled={loading}
+                >
+                  Editar factura
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
-        <DialogFooter className="pt-4 flex gap-2">
-          {facturaSeleccionada && (
-            <>
-              <Button
-                variant="destructive"
-                onClick={() => handleEliminarFactura(facturaSeleccionada.id)}
-                disabled={loading}
-              >
-                <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-              </Button>
-              <Button
-                className="flex-1 font-black"
-                style={{ backgroundColor: AMEL_YELLOW, color: "#000" }}
-                onClick={() => handleEditarFactura(facturaSeleccionada)}
-                disabled={loading}
-              >
-                Editar factura
-              </Button>
-            </>
-          )}
-        </DialogFooter>
       </Dialog>
 
       {/* Modal detalle */}
