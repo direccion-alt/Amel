@@ -20,6 +20,7 @@ export default function LogisticaDashboardPage() {
   const [unidadSeleccionada, setUnidadSeleccionada] = useState<string>("ALL")
   const [conexiones, setConexiones] = useState<any[]>([])
   const [unidadesCatalogo, setUnidadesCatalogo] = useState<any[]>([])
+  const [mantenimientos, setMantenimientos] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   const toNumber = (value: any) => {
@@ -68,6 +69,14 @@ export default function LogisticaDashboardPage() {
 
   const getKmEcuacion = (viaje: any) => {
     if (!viaje) return 0
+    
+    // Usar directamente km_total_ecuacion si existe
+    if (viaje.km_total_ecuacion !== null && viaje.km_total_ecuacion !== undefined) {
+      const kmEcu = toNumber(viaje.km_total_ecuacion)
+      return Number.isFinite(kmEcu) ? kmEcu : 0
+    }
+
+    // Fallback al cálculo manual si no existe km_total_ecuacion
     let kmBruto = 0
 
     if (Number.isFinite(viaje.km_total)) {
@@ -101,16 +110,21 @@ export default function LogisticaDashboardPage() {
       const { data: v, error: viajesError } = await supabase.from("viajes").select("*").order("created_at", { ascending: false })
       const { data: unidadesAll, error: unidadesError } = await supabase.from("unidades").select("id, economico, tipo, estatus")
       const { data: con, error: conError } = await supabase.from("unidades_conexiones").select("*").eq("activo", true)
+      const { data: m, error: mantenimientosError } = await supabase.from("mantenimientos").select("*").order("fecha_servicio", { ascending: false })
 
       if (viajesError) throw viajesError
       if (unidadesError) throw unidadesError
 
       if (v) setAllViajes(v)
       if (unidadesAll) setUnidadesCatalogo(unidadesAll)
+      if (m) setMantenimientos(m)
       if (conError) {
         console.warn("No se pudieron cargar conexiones de unidades:", conError.message)
       } else if (con) {
         setConexiones(con)
+      }
+      if (mantenimientosError) {
+        console.warn("No se pudieron cargar mantenimientos:", mantenimientosError.message)
       }
     } catch (error: any) {
       console.error("Error al cargar dashboard:", error.message)
@@ -332,6 +346,49 @@ export default function LogisticaDashboardPage() {
       const kmHistoricoMax = useMemo(() => {
         return roundUpToStep(Math.max(kmHistorico, 0), 10000)
       }, [kmHistorico])
+
+  // Velocímetro de mantenimiento: km desde último mantenimiento preventivo 25000km
+  const ultimoMantenimiento25k = useMemo(() => {
+    if (unidadSeleccionada === "ALL") return null
+
+    const mantenimientosUnidad = mantenimientos.filter((m) => 
+      normalizeEconomico(m.economico) === normalizeEconomico(unidadSeleccionada) &&
+      m.tipo_mantenimiento === "PREVENTIVO" &&
+      m.categoria === "25000km"
+    )
+
+    if (mantenimientosUnidad.length === 0) return null
+
+    // Ordenar por fecha descendente y tomar el más reciente
+    mantenimientosUnidad.sort((a, b) => {
+      const fechaA = a.fecha_servicio || ""
+      const fechaB = b.fecha_servicio || ""
+      return fechaB.localeCompare(fechaA)
+    })
+
+    return mantenimientosUnidad[0]
+  }, [mantenimientos, unidadSeleccionada])
+
+  const kmDesdeMantenimiento = useMemo(() => {
+    if (unidadSeleccionada === "ALL") return 0
+    if (!ultimoMantenimiento25k) {
+      // Si no hay mantenimiento 25000km, sumar todos los km del economico
+      return allViajes
+        .filter((viaje) => normalizeEconomico(viaje.economico) === normalizeEconomico(unidadSeleccionada))
+        .reduce((sum, viaje) => sum + getKmEcuacion(viaje), 0)
+    }
+
+    // Sumar km de viajes posteriores al último mantenimiento 25000km
+    const fechaMantenimiento = new Date(ultimoMantenimiento25k.fecha_servicio)
+    return allViajes
+      .filter((viaje) => {
+        if (normalizeEconomico(viaje.economico) !== normalizeEconomico(unidadSeleccionada)) return false
+        if (!viaje.fecha_inicial) return false
+        const fechaViaje = new Date(viaje.fecha_inicial)
+        return fechaViaje > fechaMantenimiento
+      })
+      .reduce((sum, viaje) => sum + getKmEcuacion(viaje), 0)
+  }, [allViajes, unidadSeleccionada, ultimoMantenimiento25k])
 
   const conexionesActuales = useMemo(() => {
     const unidadesById = new Map(unidadesCatalogo.map((u) => [u.id, u]))
@@ -560,34 +617,68 @@ export default function LogisticaDashboardPage() {
                 </svg>
               </div>
             </div>
+            
             <div className="rounded-xl border border-zinc-200 p-3">
-              <div className="text-[11px] font-black uppercase text-zinc-500 mb-2">Conexiones actuales</div>
-              <div className="max-h-[200px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="text-[10px] font-black uppercase text-zinc-500">
-                      <TableHead>Tracto</TableHead>
-                      <TableHead>Porta</TableHead>
-                      <TableHead>Dolly</TableHead>
-                      <TableHead>Plataforma</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {conexionesActuales.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-xs text-zinc-500">Sin conexiones registradas</TableCell>
-                      </TableRow>
+              <div className="text-[11px] font-black uppercase text-zinc-500 mb-2">Km desde mantenimiento</div>
+              <div className="text-[10px] text-zinc-400 mb-2">
+                {unidadSeleccionada === "ALL" 
+                  ? "Selecciona una unidad" 
+                  : ultimoMantenimiento25k 
+                    ? `Desde ${new Date(ultimoMantenimiento25k.fecha_servicio).toLocaleDateString('es-MX')}` 
+                    : "Sin mantenimiento 25000km"}
+              </div>
+              <div className="h-[200px] flex items-center justify-center">
+                {unidadSeleccionada === "ALL" ? (
+                  <div className="text-xs text-zinc-400 text-center">
+                    Selecciona una unidad<br/>para ver km desde mantenimiento
+                  </div>
+                ) : (
+                  <svg viewBox="0 0 220 140" className="w-full h-full">
+                    <path d={describeArc(110, 120, 80, -180, 0)} stroke="#e5e7eb" strokeWidth="16" fill="none" />
+                    <path
+                      d={describeArc(
+                        110,
+                        120,
+                        80,
+                        -180,
+                        -180 + Math.min(1, Math.max(0, kmDesdeMantenimiento / 25000)) * 180
+                      )}
+                      stroke={
+                        kmDesdeMantenimiento >= 24500 ? "#ef4444" : // Rojo
+                        kmDesdeMantenimiento >= 24000 ? "#f97316" : // Naranja
+                        kmDesdeMantenimiento >= 22000 ? "#eab308" : // Amarillo
+                        "#22c55e" // Verde
+                      }
+                      strokeWidth="16"
+                      fill="none"
+                    />
+                    <line
+                      x1="110"
+                      y1="120"
+                      x2={110 + 70 * Math.cos((Math.PI / 180) * (-180 + Math.min(1, Math.max(0, kmDesdeMantenimiento / 25000)) * 180))}
+                      y2={120 + 70 * Math.sin((Math.PI / 180) * (-180 + Math.min(1, Math.max(0, kmDesdeMantenimiento / 25000)) * 180))}
+                      stroke="#111827"
+                      strokeWidth="3"
+                    />
+                    <circle cx="110" cy="120" r="4" fill="#111827" />
+                    <text x="110" y="110" textAnchor="middle" className="fill-zinc-700 text-base font-black">
+                      {formatKmCompact(kmDesdeMantenimiento)}
+                    </text>
+                    <text x="30" y="135" textAnchor="start" className="fill-zinc-400 text-[10px]">0</text>
+                    <text x="190" y="135" textAnchor="end" className="fill-zinc-400 text-[10px]">25k</text>
+                    {kmDesdeMantenimiento >= 22000 && (
+                      <text x="110" y="125" textAnchor="middle" className={`text-[10px] font-bold ${
+                        kmDesdeMantenimiento >= 24500 ? "fill-red-600" :
+                        kmDesdeMantenimiento >= 24000 ? "fill-orange-600" :
+                        "fill-yellow-600"
+                      }`}>
+                        {kmDesdeMantenimiento >= 24500 ? "¡URGENTE!" :
+                         kmDesdeMantenimiento >= 24000 ? "Próximo servicio" :
+                         "Acercándose"}
+                      </text>
                     )}
-                    {conexionesActuales.map((item) => (
-                      <TableRow key={item.tracto.id} className="text-xs">
-                        <TableCell className="font-bold">{item.tracto.economico}</TableCell>
-                        <TableCell>{item.PORT?.economico || "—"}</TableCell>
-                        <TableCell>{item.DOL?.economico || "—"}</TableCell>
-                        <TableCell>{item.PLAT?.economico || "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                  </svg>
+                )}
               </div>
             </div>
           </div>

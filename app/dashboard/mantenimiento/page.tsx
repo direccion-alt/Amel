@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 export default function MantenimientoAmel() {
   const [mantenimientos, setMantenimientos] = useState<any[]>([])
   const [unidades, setUnidades] = useState<any[]>([])
+  const [viajes, setViajes] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [showNuevo, setShowNuevo] = useState(false)
   const [verDetalle, setVerDetalle] = useState<any>(null)
@@ -37,7 +38,7 @@ export default function MantenimientoAmel() {
     tipo_unidad: 'TRACTO',
     fecha_servicio: new Date().toISOString().split('T')[0],
     tipo_mantenimiento: 'PREVENTIVO',
-    categoria: 'ACEITE Y FILTROS',
+    categoria: '25000km',
     km_actual: '',
     km_proximo_servicio: '',
     descripcion: '',
@@ -68,16 +69,92 @@ export default function MantenimientoAmel() {
     setLoading(true)
     const { data: m, error: errM } = await supabase.from('mantenimientos').select('*').order('fecha_servicio', { ascending: false })
     const { data: u, error: errU } = await supabase.from('unidades').select('economico, tipo').eq('estatus', 'Activo').order('economico')
+    const { data: v, error: errV } = await supabase.from('viajes').select('*').order('created_at', { ascending: false })
     
     if (errM) console.error('Error fetching mantenimientos:', errM)
     if (errU) console.error('Error fetching unidades:', errU)
+    if (errV) console.error('Error fetching viajes:', errV)
     
     if (m) setMantenimientos(m)
     if (u) setUnidades(u)
+    if (v) setViajes(v)
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Utilidades
+  const normalizeEconomico = (value: any) => String(value || "").trim().toUpperCase()
+  const toNumber = (value: any) => {
+    if (value === "" || value === null || value === undefined) return 0
+    const parsed = Number(value)
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+
+  const getKmEcuacion = (viaje: any) => {
+    if (!viaje) return 0
+    if (viaje.km_total_ecuacion !== null && viaje.km_total_ecuacion !== undefined) {
+      const kmEcu = toNumber(viaje.km_total_ecuacion)
+      return Number.isFinite(kmEcu) ? kmEcu : 0
+    }
+    let kmBruto = 0
+    if (Number.isFinite(viaje.km_total)) {
+      kmBruto = Number(viaje.km_total)
+    } else if (viaje.km_final !== null && viaje.km_final !== undefined) {
+      kmBruto = toNumber(viaje.km_final) - toNumber(viaje.km_inicial)
+    } else {
+      return 0
+    }
+    const kmEcu = viaje.es_millas ? (kmBruto * 1.6) : kmBruto
+    return Number.isFinite(kmEcu) ? kmEcu : 0
+  }
+
+  // Calcular alertas de mantenimiento (unidades tracto próximas a 22k+ km)
+  const alertasMantenimiento = useMemo(() => {
+    const tractos = unidades.filter(u => String(u.tipo || "").toUpperCase().includes("TRAC"))
+    const alerts: any[] = []
+
+    for (const tracto of tractos) {
+      const mantenimientos25k = mantenimientos.filter(m => 
+        normalizeEconomico(m.economico) === normalizeEconomico(tracto.economico) &&
+        m.tipo_mantenimiento === "PREVENTIVO" &&
+        m.categoria === "25000km"
+      ).sort((a, b) => (b.fecha_servicio || "").localeCompare(a.fecha_servicio || ""))
+
+      const ultimoMtto = mantenimientos25k[0]
+      
+      let kmDesdeMantenimiento = 0
+      if (!ultimoMtto) {
+        // Sin mantenimiento: sumar todos los km
+        kmDesdeMantenimiento = viajes
+          .filter(v => normalizeEconomico(v.economico) === normalizeEconomico(tracto.economico))
+          .reduce((sum, v) => sum + getKmEcuacion(v), 0)
+      } else {
+        // Con mantenimiento: sumar km posteriores
+        const fechaMtto = new Date(ultimoMtto.fecha_servicio)
+        kmDesdeMantenimiento = viajes
+          .filter(v => {
+            if (normalizeEconomico(v.economico) !== normalizeEconomico(tracto.economico)) return false
+            if (!v.fecha_inicial) return false
+            return new Date(v.fecha_inicial) > fechaMtto
+          })
+          .reduce((sum, v) => sum + getKmEcuacion(v), 0)
+      }
+
+      // Solo incluir si está >= 22000 km
+      if (kmDesdeMantenimiento >= 22000) {
+        alerts.push({
+          economico: tracto.economico,
+          km: kmDesdeMantenimiento,
+          ultimoMtto: ultimoMtto ? new Date(ultimoMtto.fecha_servicio).toLocaleDateString('es-MX') : "Sin registro",
+          nivel: kmDesdeMantenimiento >= 24500 ? "URGENTE" : 
+                 kmDesdeMantenimiento >= 24000 ? "ALTA" : "MEDIA"
+        })
+      }
+    }
+
+    return alerts.sort((a, b) => b.km - a.km)
+  }, [unidades, mantenimientos, viajes])
 
   // Aplicar filtros
   const mantenimientosFiltrados = mantenimientos.filter(m => {
@@ -151,8 +228,9 @@ export default function MantenimientoAmel() {
         )
       }
 
-      // Calcular km_proximo_servicio si no se especificó
-      const kmProximo = form.km_proximo_servicio || (Number(form.km_actual) + 25000)
+      // Calcular km_proximo_servicio solo para categoría 25000km
+      const kmProximo = form.km_proximo_servicio || 
+        (form.categoria === '25000km' ? Number(form.km_actual) + 25000 : Number(form.km_actual))
       
       // Calcular monto_total
       const monto_refacciones = Number(form.monto_refacciones) || 0
@@ -229,7 +307,7 @@ export default function MantenimientoAmel() {
       tipo_unidad: 'TRACTO',
       fecha_servicio: new Date().toISOString().split('T')[0],
       tipo_mantenimiento: 'PREVENTIVO',
-      categoria: 'ACEITE Y FILTROS',
+      categoria: '25000km',
       km_actual: '',
       km_proximo_servicio: '',
       descripcion: '',
@@ -438,6 +516,58 @@ export default function MantenimientoAmel() {
           </Card>
         </div>
 
+        {/* ALERTAS DE MANTENIMIENTO 25000KM */}
+        {alertasMantenimiento.length > 0 && (
+          <Card className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-black uppercase text-red-700 flex items-center gap-2">
+                <AlertTriangle size={20} className="text-red-600" />
+                Unidades próximas a mantenimiento 25000km
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {alertasMantenimiento.map((alerta: any) => (
+                  <div 
+                    key={alerta.economico}
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 ${
+                      alerta.nivel === "URGENTE" ? "bg-red-100 border-red-400" :
+                      alerta.nivel === "ALTA" ? "bg-orange-100 border-orange-400" :
+                      "bg-yellow-100 border-yellow-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        alerta.nivel === "URGENTE" ? "bg-red-600 animate-pulse" :
+                        alerta.nivel === "ALTA" ? "bg-orange-500" :
+                        "bg-yellow-500"
+                      }`} />
+                      <div>
+                        <div className="font-black text-sm">{alerta.economico}</div>
+                        <div className="text-xs text-zinc-600">Último mtto: {alerta.ultimoMtto}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-lg font-black ${
+                        alerta.nivel === "URGENTE" ? "text-red-700" :
+                        alerta.nivel === "ALTA" ? "text-orange-700" :
+                        "text-yellow-700"
+                      }`}>
+                        {alerta.km.toLocaleString('es-MX', { maximumFractionDigits: 0 })} km
+                      </div>
+                      <div className="text-xs font-bold uppercase">
+                        {alerta.nivel === "URGENTE" ? "¡URGENTE! >24,500 km" :
+                         alerta.nivel === "ALTA" ? "Alta >24,000 km" :
+                         "Media >22,000 km"}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* FILTROS */}
         <Card className="bg-white">
           <CardContent className="p-4">
@@ -466,6 +596,7 @@ export default function MantenimientoAmel() {
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="ALL">Todas</option>
+                  <option value="25000km">25000km</option>
                   <option value="REFACCIONES">REFACCIONES</option>
                   <option value="FERRETERIA">FERRETERIA</option>
                   <option value="MANO DE OBRA">MANO DE OBRA</option>
@@ -658,6 +789,7 @@ export default function MantenimientoAmel() {
                   onChange={(e) => setForm({...form, categoria: e.target.value})}
                   className="w-full border-2 rounded-xl px-4 py-3 font-bold"
                 >
+                  <option value="25000km">25000km (Preventivo cada 25k)</option>
                   <option value="ACEITE Y FILTROS">ACEITE Y FILTROS</option>
                   <option value="REFACCIONES">REFACCIONES</option>
                   <option value="FERRETERIA">FERRETERIA</option>
