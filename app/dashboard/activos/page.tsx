@@ -509,6 +509,90 @@ export default function ActivosPage() {
         if (itemsPayload.length > 0) {
           const { error: itemsError } = await supabase.from("facturas_activos_items").insert(itemsPayload)
           if (itemsError) throw itemsError
+
+          // Crear activos automáticamente desde los items de la factura (solo en modo creación)
+          if (!editingFacturaId) {
+            for (const item of itemsPayload) {
+              // Verificar si ya existe un activo con la misma descripción y categoría
+              const { data: existingActivo } = await supabase
+                .from("activos")
+                .select("*")
+                .eq("nombre", item.descripcion)
+                .eq("categoria", item.categoria || "")
+                .single()
+
+              if (existingActivo) {
+                // Si existe, actualizar cantidad total y disponible
+                const nuevaCantidadTotal = Number(existingActivo.cantidad_total || 0) + Number(item.cantidad || 0)
+                const nuevaCantidadDisponible = Number(existingActivo.cantidad_disponible || 0) + Number(item.cantidad || 0)
+
+                await supabase
+                  .from("activos")
+                  .update({
+                    cantidad_total: nuevaCantidadTotal,
+                    cantidad_disponible: nuevaCantidadDisponible,
+                  })
+                  .eq("id", existingActivo.id)
+
+                // Actualizar inventario por ubicación
+                const { data: existingInv } = await supabase
+                  .from("inventario_activos_ubicacion")
+                  .select("*")
+                  .eq("activo_id", existingActivo.id)
+                  .eq("ubicacion", facturaForm.ubicacion || "PATIO COATZACOALCOS")
+                  .single()
+
+                if (existingInv) {
+                  await supabase
+                    .from("inventario_activos_ubicacion")
+                    .update({
+                      cantidad: Number(existingInv.cantidad || 0) + Number(item.cantidad || 0),
+                    })
+                    .eq("id", existingInv.id)
+                } else {
+                  await supabase
+                    .from("inventario_activos_ubicacion")
+                    .insert([{
+                      activo_id: existingActivo.id,
+                      ubicacion: facturaForm.ubicacion || "PATIO COATZACOALCOS",
+                      cantidad: item.cantidad || 0,
+                    }])
+                }
+              } else {
+                // Si no existe, crear nuevo activo
+                const { data: nuevoActivo, error: activoError } = await supabase
+                  .from("activos")
+                  .insert([{
+                    nombre: item.descripcion,
+                    categoria: item.categoria || null,
+                    cantidad_total: item.cantidad || 0,
+                    cantidad_disponible: item.cantidad || 0,
+                    ubicacion_actual: facturaForm.ubicacion || "PATIO COATZACOALCOS",
+                    proveedor_compra: facturaForm.proveedor || null,
+                    fecha_compra: facturaForm.fecha_compra || null,
+                    compra_subtotal: item.subtotal || null,
+                    compra_iva: item.iva || null,
+                    compra_total: item.total || null,
+                    factura_url: facturaForm.factura_url || null,
+                  }])
+                  .select()
+                  .single()
+
+                if (activoError) throw activoError
+
+                // Crear inventario por ubicación
+                if (nuevoActivo) {
+                  await supabase
+                    .from("inventario_activos_ubicacion")
+                    .insert([{
+                      activo_id: nuevoActivo.id,
+                      ubicacion: facturaForm.ubicacion || "PATIO COATZACOALCOS",
+                      cantidad: item.cantidad || 0,
+                    }])
+                }
+              }
+            }
+          }
         }
       }
 
