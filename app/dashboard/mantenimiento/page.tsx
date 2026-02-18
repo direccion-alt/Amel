@@ -330,6 +330,109 @@ export default function MantenimientoAmel() {
     setArchivoComprobante(null)
   }
 
+  // Exportar a CSV
+  const exportarCSV = () => {
+    if (mantenimientosFiltrados.length === 0) {
+      alert("No hay mantenimientos para exportar")
+      return
+    }
+
+    const headers = [
+      "Unidad", "Tipo Unidad", "Fecha Servicio", "Tipo Mtto", "Categoría", 
+      "KM Actual", "KM Próximo", "Descripción", "Síntomas", "Diagnóstico",
+      "Proveedor", "Teléfono", "Folio", "Monto Refacciones", "Monto Mano Obra",
+      "Monto Otros", "Total sin IVA", "Total con IVA (16%)", "En Garantía", "Estatus"
+    ]
+
+    const rows = mantenimientosFiltrados.map(m => [
+      m.economico || "",
+      m.tipo_unidad || "",
+      m.fecha_servicio || "",
+      m.tipo_mantenimiento || "",
+      m.categoria || "",
+      m.km_actual || "",
+      m.km_proximo_servicio || "",
+      m.descripcion || "",
+      m.sintomas || "",
+      m.diagnostico || "",
+      m.proveedor || "",
+      m.telefono_proveedor || "",
+      m.folio_ticket || "",
+      m.monto_refacciones || "",
+      m.monto_mano_obra || "",
+      m.monto_otros || "",
+      m.monto_total || "",
+      (m.monto_total || 0) * 1.16 || "",
+      m.en_garantia ? "Sí" : "No",
+      m.estatus || ""
+    ])
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `mantenimientos_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  // Exportar a XLSX
+  const exportarXLSX = () => {
+    // Crear datos para Excel
+    const headers = [
+      "Unidad", "Tipo Unidad", "Fecha Servicio", "Tipo Mtto", "Categoría", 
+      "KM Actual", "KM Próximo", "Descripción", "Síntomas", "Diagnóstico",
+      "Proveedor", "Teléfono", "Folio", "Monto Refacciones", "Monto Mano Obra",
+      "Monto Otros", "Total sin IVA", "Total con IVA (16%)", "En Garantía", "Estatus"
+    ]
+
+    const rows = mantenimientosFiltrados.map(m => [
+      m.economico || "",
+      m.tipo_unidad || "",
+      m.fecha_servicio || "",
+      m.tipo_mantenimiento || "",
+      m.categoria || "",
+      m.km_actual || "",
+      m.km_proximo_servicio || "",
+      m.descripcion || "",
+      m.sintomas || "",
+      m.diagnostico || "",
+      m.proveedor || "",
+      m.telefono_proveedor || "",
+      m.folio_ticket || "",
+      m.monto_refacciones || 0,
+      m.monto_mano_obra || 0,
+      m.monto_otros || 0,
+      m.monto_total || 0,
+      (m.monto_total || 0) * 1.16 || 0,
+      m.en_garantia ? "Sí" : "No",
+      m.estatus || ""
+    ])
+
+    // Crear CSV que Excel puede abrir
+    const csvContent = [
+      headers.join("\t"),
+      ...rows.map(row => row.map(cell => `${cell}`).join("\t"))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `mantenimientos_${new Date().toISOString().split('T')[0]}.xlsx`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const handleEliminar = async (id: string) => {
     if (!confirm('¿Eliminar este registro de mantenimiento?')) return
     
@@ -624,13 +727,29 @@ export default function MantenimientoAmel() {
                 </select>
               </div>
 
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
                 <Button 
                   onClick={() => { setFiltroUnidad('ALL'); setFiltroCategoria('ALL'); setFiltroTipo('ALL'); }}
                   variant="outline"
-                  className="w-full"
+                  className="flex-1"
                 >
                   Limpiar Filtros
+                </Button>
+                <Button 
+                  onClick={exportarCSV}
+                  variant="outline"
+                  className="flex-1 bg-green-50 hover:bg-green-100"
+                  title="Descargar como CSV"
+                >
+                  <Download size={16} className="mr-2" /> CSV
+                </Button>
+                <Button 
+                  onClick={exportarXLSX}
+                  variant="outline"
+                  className="flex-1 bg-blue-50 hover:bg-blue-100"
+                  title="Descargar como Excel"
+                >
+                  <Download size={16} className="mr-2" /> XLSX
                 </Button>
               </div>
             </div>
